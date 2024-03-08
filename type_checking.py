@@ -98,7 +98,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     # FIXME - figure out if it is needed to check which operation is performed
     def get_effective_type(self, type1, type2, t):
-        print(t)
         match t.op:
             case "==" | "!=" | "<" | ">" | "<=" | ">=":
                 if type1 and type2:
