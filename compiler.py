@@ -1,19 +1,3 @@
-#!/usr/bin/env python3
-
-# Copyright (C) 2019
-# Kim Skak Larsen
-# All rights reserved.
-# License: GNU GPLv3
-
-# Description: A compiler is implemented. The implementation is meant for
-# teaching purposes. The goal is to illustrate important compiler
-# techniques in a simple setting and to enable the students to make
-# minor adjustments and extensions. The source language is a simple
-# imperative languages with integers being the only type, but including
-# expressions, assignment, control structures, and function definitions
-# and calls, including recursion and static nested scope. The target
-# language is 64 bit x86 assembler using the GNU syntax.
-
 import sys
 import getopt
 
@@ -31,7 +15,6 @@ __version__ = "1.2.3"
 
 
 # MAIN
-
 def compiler(showSource, showAST, macOS, input_file, output_file):
     """This function goes through the classic phases of a modern compiler,
     each phase organized in its own module. The phases are:

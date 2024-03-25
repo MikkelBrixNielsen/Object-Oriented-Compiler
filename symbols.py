@@ -12,6 +12,11 @@ class NameCategory(Enum):
     FUNCTION = auto()
     CLASS = auto()
     INSTANCE = auto()
+    ATTRIBUTE = auto()
+
+class Scope(Enum):
+    FUNCTION = auto()
+    CLASS = auto()
 
 
 class SymVal():
@@ -55,7 +60,7 @@ class ASTSymbolVisitor(VisitorsBase):
     def __init__(self):
         # The main scope does not have a surrounding scope
         self._current_scope = None
-        # Have not entered the main scope (level 0) yet:
+        # Have not entered the global scope (level 0) yet:
         self._current_level = -1
 
     def preVisit_body(self, t):
@@ -95,6 +100,7 @@ class ASTSymbolVisitor(VisitorsBase):
                     "Symbol Collection",
                     f"Redeclaration of function '{t.name}' in the same scope.",
                     t.lineno)
+                
             self._current_scope.insert(
                 t.name, SymVal(NameCategory.FUNCTION, t.type, self._current_level, t))
         # Parameters and the body of the function belongs to the inner scope:
@@ -139,8 +145,10 @@ class ASTSymbolVisitor(VisitorsBase):
         # if variables_list has a next pass along its type
         if t.next: 
             t.next.type = t.type
+        self._record_variables(t, NameCategory.VARIABLE)
 
-        # Recording local variable names in the symbol table:
+    def _record_variables(self, t, *args): # maybe don't need to be *args
+        # AUX: Recording local variable names in the symbol table:
         if self._current_scope.lookup_this_scope(t.variable):
             error_message(
                 "Symbol Collection",
@@ -148,23 +156,41 @@ class ASTSymbolVisitor(VisitorsBase):
                 t.lineno)
  
         self._current_scope.insert(
-            t.variable, SymVal(NameCategory.VARIABLE,
+            t.variable, SymVal(args[0],
                                t.type,
                                self._current_level,
-                               self.variable_offset))
+                               [self.variable_offset] + [x for x in args]))
         self.variable_offset += 1
 
     def postVisit_expression_identifier(self, t):
-        value = self._current_scope.lookup(t.identifier)
+        value = self._current_scope.lookup(t.identifier) 
         if not value:
             error_message("Symbol Collection",
                           f"Identifier '{t.identifier}' not found.",
                           t.lineno)
         t.type = value.type
 
+    def postVisit_attribute(self, t):
+        print(t)
+        value = self._current_scope.lookup(t.attr)
+        if not value:
+            error_message("Symbol Collection",
+                          f"Identifier '{t.attr}' not found.",
+                          t.lineno)
+        
+
+
+
+
+ 
+
+
+
+    # make class declaration the descriptor and give class 
+    # declaration in lexer a class body instead of descriptor???
     def preVisit_class_declaration(self, t):
-        value = self._current_scope.lookup_this_scope(t.name)
-        if value:
+        info = [[],[]]
+        if self._current_scope.lookup_this_scope(t.name):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
@@ -172,8 +198,76 @@ class ASTSymbolVisitor(VisitorsBase):
             t.name, SymVal(NameCategory.CLASS,
                            None,
                            self._current_level,
-                           t))
+                           info))
+        t.descriptor.name = t.name
+        # descriptor of the class belongs to the inner scope:
+        self._current_level += 1
+        self._current_scope = SymbolTable(self._current_scope)
+        # Saving the current symbol table in the AST for future use:
+        t.symbol_table = self._current_scope
+        t.scope_level = self._current_level
+        # Preparing for the processing of formal parameters:
+        self.parameter_offset = 0
+
+    def postVisit_class_declaration(self, t):
+        self._current_scope = self._current_scope.parent
+        self._current_level -= 1
     
+    def preVisit_class_descriptor(self, t):
+        if t.attributes:
+            t.attributes.name = t.name
+        if t.methods:
+            t.methods.parent = t.name
+
+
+
+
+    # FIXME - Record attributes in symbol table
+            # Look at how variable list does this
+            # When looking for attribtues using "this." syntax or similar go to scope_level == 1 (this should be the class)
+    def preVisit_attributes_declaration_list(self, t):
+        t.decl.name = t.name
+        t.decl.type = t.type
+        if t.next:
+            t.next.name = t.name
+
+    def preVisit_attributes_list(self, t):
+        if t.next:
+            t.next.name = t.name
+            t.next.type = t.type
+
+        value = self._current_scope.lookup(t.name)
+        value.info[0].append((t.variable, t.type))
+        self._record_variables(t, NameCategory.ATTRIBUTE, t.name) # maybe name is useless
+
+    def preVisit_methods_declaration_list(self, t):
+        t.decl.parent = t.parent
+        if t.next:
+            t.next.parent = t.parent
+
+    def preVisit_method(self, t):
+        t.par_list.type = t.parent # sets the reference to the class it belongs to 
+        self.preVisit_function(t)
+        value = self._current_scope.lookup(t.parent)
+        value.info[1].append((t.name, t.type, t.par_list))
+
+    def midVisit_method(self, t):
+        self.midVisit_function(t)
+    
+    def postVisit_method(self, t):
+        self.postVisit_function(t)
+
+
+
+
+
+
+
+
+
+
+
+
     # Make function part of the structs in C code 
     # Make this.<attr> syntax to differentiat between global variable, parameters, and class attributes
     # Make new syntax work to create class instances 

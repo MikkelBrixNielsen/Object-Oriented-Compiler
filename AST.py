@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+
 from typing import Any
 
 
@@ -30,7 +31,6 @@ class global_body:
             self.class_decl.accept(visitor)
         visitor.postMidVisit(self)
 
-
 @dataclass
 class body:
     variables_decl: Any
@@ -51,7 +51,6 @@ class body:
             self.stm_list.accept(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class variables_declaration_list:
     type: Any
@@ -67,6 +66,18 @@ class variables_declaration_list:
             self.next.accept(visitor)
         visitor.postVisit(self)
 
+@dataclass
+class variables_list:
+    variable: Any
+    next: Any
+    lineno: int
+    type: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
 
 @dataclass
 class functions_declaration_list:
@@ -80,7 +91,6 @@ class functions_declaration_list:
         if self.next:
             self.next.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class function:
@@ -97,6 +107,21 @@ class function:
         visitor.midVisit(self)
         self.body.accept(visitor)
         visitor.postVisit(self)
+
+@dataclass
+class parameter_list:
+    type: Any
+    parameter: Any
+    next: Any
+    lineno: int
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
+
+
 
 
 
@@ -124,18 +149,112 @@ class class_declaration_list:
 class class_declaration:
     name: Any
     extends: Any
-    att_list: Any
-    func_list: Any
+    descriptor: Any
     lineno: int
     
     def accept(self, visitor):
         visitor.preVisit(self)
-        if self.att_list:
-            self.att_list.accept(visitor)
+        self.descriptor.accept(visitor)
+        visitor.postVisit(self)        
+
+@dataclass
+class class_descriptor:
+    attributes: Any
+    methods: Any
+    lineno: int
+    name: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.attributes:
+            self.attributes.accept(visitor)
         visitor.midVisit(self)
-        if self.func_list:
-            self.func_list.accept(visitor)
+        if self.methods:
+            self.methods.accept(visitor)
         visitor.postVisit(self)
+
+@dataclass
+class attributes_declaration_list:
+    type: Any
+    decl: Any
+    next: Any
+    lineno: int
+    name: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        self.decl.accept(visitor)
+        visitor.midVisit(self)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
+
+@dataclass
+class attributes_list:
+    variable: Any
+    next: Any
+    lineno: int
+    type: Any = field(default=None)
+    name: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
+
+@dataclass
+class methods_declaration_list:
+    decl: Any
+    next: Any
+    lineno: int
+    parent: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        self.decl.accept(visitor)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
+
+@dataclass
+class method:
+    type: Any
+    name: Any
+    par_list: Any
+    body: Any
+    lineno: int
+    parent: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.par_list:
+            self.par_list.accept(visitor)
+        visitor.midVisit(self)
+        self.body.accept(visitor)
+        visitor.postVisit(self)
+
+
+
+
+
+
+@dataclass
+class attribute:
+    attr: Any
+    lineno: int
+
+    def accept(self, visitor):
+        visitor.postVisit(self)
+        
+
+    
+
+
+
+
+
+
 
 @dataclass
 class expression_attribute:
@@ -143,8 +262,6 @@ class expression_attribute:
     field: Any
     type: Any = field(default=None)
 
-    def accept(self, visitor):
-        visitor.postVisit(self)
 
 
 
@@ -155,33 +272,6 @@ class expression_attribute:
 
 
 
-
-@dataclass
-class parameter_list:
-    type: Any
-    parameter: Any
-    next: Any
-    lineno: int
-
-    def accept(self, visitor):
-        visitor.preVisit(self)
-        if self.next:
-            self.next.accept(visitor)
-        visitor.postVisit(self)
-
-
-@dataclass
-class variables_list:
-    variable: Any
-    next: Any
-    lineno: int
-    type: Any = field(default=None)
-
-    def accept(self, visitor):
-        visitor.preVisit(self)
-        if self.next:
-            self.next.accept(visitor)
-        visitor.postVisit(self)
 
 
 @dataclass
@@ -194,7 +284,6 @@ class statement_return:
         self.exp.accept(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class statement_print:
     exp: Any
@@ -205,7 +294,6 @@ class statement_print:
         self.exp.accept(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class statement_assignment:
     lhs: Any
@@ -214,9 +302,11 @@ class statement_assignment:
 
     def accept(self, visitor):
         visitor.preVisit(self)
+        if not isinstance(self.lhs, str):  
+            self.lhs.accept(visitor)
+        visitor.midVisit(self)
         self.rhs.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class statement_ifthenelse:
@@ -234,7 +324,6 @@ class statement_ifthenelse:
         self.else_part.accept(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class statement_while:
     exp: Any
@@ -247,7 +336,6 @@ class statement_while:
         visitor.midVisit(self)
         self.while_part.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class statement_list:
@@ -262,7 +350,6 @@ class statement_list:
             self.next.accept(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class assignment_list:
     ass: Any
@@ -273,7 +360,6 @@ class assignment_list:
         self.ass.accept(visitor)
         if self.next:
             self.next.accept(visitor)
-
 
 @dataclass
 class expression_integer:
@@ -334,7 +420,6 @@ class expression_identifier:
     def accept(self, visitor):
         visitor.postVisit(self)
 
-
 @dataclass
 class expression_call:
     name: str
@@ -346,7 +431,6 @@ class expression_call:
         if self.exp_list:
             self.exp_list.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class expression_binop:
@@ -362,7 +446,6 @@ class expression_binop:
         visitor.midVisit(self)
         self.rhs.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class expression_list:

@@ -14,8 +14,27 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_function(self, t):
         self._current_scope = self._current_scope.parent
 
+    def preVisit_class_declaration(self, t):
+        self._current_scope = t.symbol_table
+
+    def postVisit_class_declaration(self, t):
+        self._current_scope = self._current_scope.parent
+
+    def preVisit_method(self, t):
+        self._current_scope = t.symbol_table
+        
+    def postVisit_method(self, t):
+        self._current_scope = self._current_scope.parent
+
     def postVisit_statement_assignment(self, t):
-        lhs = self._current_scope.lookup(t.lhs)
+        lhs = None
+        # FIXME - This is really specific make it more general
+        if t.lhs.__class__.__name__ == "attribute":
+            lhs = self._current_scope.parent.lookup_this_scope(t.lhs.attr)
+            t.lhs.class_name = lhs.info[-1] # maybe useless
+        else: 
+            lhs = self._current_scope.lookup(t.lhs)
+
         t_rhs = self.get_type(t.rhs)
 
         if not lhs:
@@ -30,13 +49,13 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Assignment to function '{t.lhs}' not allowed.",
                           t.lineno)
-        ### check whether what is being assigned has the same type as what is being assigned to
+        # check whether what is being assigned has the same type as what is being assigned to
         t_lhs = lhs.type
         if not t_lhs == t_rhs:
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
                           t.rhs.lineno)
-            
+
     def postVisit_expression_identifier(self, t):
         value = self._current_scope.lookup(t.identifier)
         if not value:
@@ -48,6 +67,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 "Type Checking",
                 f"Function name '{t.identifier}' cannot be an identifier.",
                 t.lineno)
+
 
     def preVisit_expression_call(self, t):
         self.number_of_actual_parameters.append(0)
@@ -85,12 +105,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 return self.get_effective_type(self.get_type(t.lhs), self.get_type(t.rhs), t)
             case "expression_call":
                 return self._current_scope.lookup(t.name).type
+            case "attribute":
+                  return self._current_scope.parent.lookup_this_scope(t.attr).type
             case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char":
                 return t.type
             case "expression_identifier":
                 return self._current_scope.lookup(t.identifier).type
             case "expression_group":
-                # FIXME - evaluate expression groupe somehow
+                # FIXME - evaluate expression groupe somehow or remove it from program in its entirity
                 return None
             case _:
                   error_message("Type Checking", f"get_type does not implement {t.__class__.__name__}", t.lineno)

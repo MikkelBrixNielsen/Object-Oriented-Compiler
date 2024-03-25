@@ -9,11 +9,12 @@ from errors import error_message
 # LEXICAL UNITS
 
 reserved = {
-    'if': 'IF',
-    'then': 'THEN',
-    'else': 'ELSE',
-    'while': 'WHILE',
-    'do': 'DO',
+    'if': 'IF',             # Not implemented
+    'then': 'THEN',         # same 
+    'else': 'ELSE',         # same
+    'while': 'WHILE',       # same
+    'do': 'DO',             # same
+    'this': 'THIS',
     'function': 'FUNCTION',
     'class': 'CLASS',
     'return': 'RETURN',
@@ -171,8 +172,9 @@ def p_assignment_list(t):
 
 # DUE TO STM_LIST BEING OPTIONAL FUNCTIONS NO LONGER HAVE REQUIRED RETURN STATEMENT
 # MAKE IT SO RETURN IS REQUIRED BY FUNCTIONS WHICH AREN'T GLOLAL FUNCTION
+# FIXME - includes instance syntax and this. syntax the latter should only be allowed in classes though
 def p_body(t):
-    'body : optional_variables_declaration_list optional_functions_declaration_list optional_statement_list'
+    'body : optional_variables_declaration_list optional_statement_list optional_functions_declaration_list optional_statement_list'
     t[0] = AST.body(t[1], t[2], t[3], t.lexer.lineno)
 
 def p_optional_variables_declaration_list(t):
@@ -227,22 +229,81 @@ def p_class_declaration_list(t):
 # FIXME - Currently cannot extend parent class(') 
 # FIXME - CONSTRUCTOR?!?!?!?!?!?!!?!??!?!?!!?!?!?
 def p_class_declaration(t):
-    '''class_declaration : CLASS IDENT optional_extends LCURL optional_variables_declaration_list optional_functions_declaration_list RCURL'''
-    t[0] = AST.class_declaration(t[2], t[3], t[5], t[6], t.lexer.lineno)
+    '''class_declaration : CLASS IDENT optional_extends LCURL class_descriptor RCURL'''
+    t[0] = AST.class_declaration(t[2], t[3], t[5], t.lexer.lineno)
+
+# FIXME - Put class descriptors into symbol table
+    # put attributes into the symbol table
+    # Generate code for class 
+    # Create "this." syntax for accessing instance attributes 
+    # Figure out how to do the lookup for finding methods when calling methods on instances
+    # Create syntax for recognizing instances 
+    # put instances into symbol table
+def p_class_descriptor(t):
+    '''class_descriptor : optional_attributes_declaration_list optional_methods_declaration_list'''
+    t[0] = AST.class_descriptor(t[1], t[2], t.lexer.lineno)
+
+def p_optional_attributes_declaration_list(t):
+    '''optional_attributes_declaration_list : empty
+                                            | attributes_declaration_list'''
+    t[0] = t[1]
+
+def p_attributes_declaration_list(t):
+    '''attributes_declaration_list : TYPE attributes_list SEMICOL
+                                   | TYPE attributes_list SEMICOL attributes_declaration_list'''
+    if len(t) == 4:
+        t[0] = AST.attributes_declaration_list(t[1], t[2], None, t.lexer.lineno)
+    else:
+        t[0] = AST.attributes_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
+
+def p_attributes_list(t):
+    '''attributes_list : IDENT
+                       | IDENT COMMA attributes_list'''
+    if len(t) == 2:
+        t[0] = AST.attributes_list(t[1], None, t.lexer.lineno)
+    else:
+        t[0] = AST.attributes_list(t[1], t[3], t.lexer.lineno)
+
+
+
+
+
+#same as functions but for classes - so is handled differently
+def p_optional_methods_declaration_list(t):
+    '''optional_methods_declaration_list : empty
+                                         | methods_declaration_list'''
+    t[0] = t[1]
+
+def p_methods_declaration_list(t):
+    '''methods_declaration_list : method
+                                | method methods_declaration_list'''
+    if len(t) == 2:
+        t[0] = AST.methods_declaration_list(t[1], None, t.lexer.lineno)
+    else:
+        t[0] = AST.methods_declaration_list(t[1], t[2], t.lexer.lineno)
+
+def p_method(t):
+    'method : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
+    t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "*this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
+
+
+
+
+
+
+
+
+
 
 def p_optional_extends(t):
     '''optional_extends : empty'''
                         # | EXTENDS IDENT''' # EXTENDS IDENT, IDENT, IDENT ...
     t[0] = t[1]
 
-
-
-
 def p_optional_functions_declaration_list(t):
     '''optional_functions_declaration_list : empty
                                            | functions_declaration_list'''
     t[0] = t[1]
-
 
 def p_functions_declaration_list(t):
     '''functions_declaration_list : function
@@ -256,7 +317,6 @@ def p_functions_declaration_list(t):
 def p_function(t):
     'function : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
     t[0] = AST.function(t[2], t[3], t[5], t[8], t.lexer.lineno)
-
 
 def p_optional_parameter_list(t):
     '''optional_parameter_list : empty
@@ -294,8 +354,18 @@ def p_statement_print(t):
 
 
 def p_statement_assignment(t):
-    'statement_assignment : IDENT ASSIGN expression SEMICOL'
+    'statement_assignment : lhs ASSIGN expression SEMICOL'
     t[0] = AST.statement_assignment(t[1], t[3], t.lexer.lineno)
+
+def p_lhs(t): # make this more uniform so that the other phases have a similar interface to interact with attributes, identifers and whatever else might come
+    '''lhs : IDENT
+           | THIS DOT IDENT'''
+    if len(t) == 2:
+        t[0] = t[1]
+    else: 
+        t[0] = AST.attribute(t[3], t.lexer.lineno)
+
+
 
 # FIXME NOT IMPLEMENTED
 def p_statement_ifthenelse(t):
@@ -327,7 +397,7 @@ def p_statement_list(t):
     else:
         t[0] = AST.statement_list(t[1], t[2], t.lexer.lineno)
 
-# FIXME NOT IMPLEMENTE groupe / string
+# FIXME NOT IMPLEMENTE groupe / string or expression_attribute 
 def p_expression(t):
     '''expression : expression_integer
                   | expression_float
@@ -336,7 +406,8 @@ def p_expression(t):
                   | expression_identifier
                   | expression_call
                   | expression_binop
-                  | expression_attribute'''
+                  | expression_attribute
+                  | expression_this_attribute'''
                  #| expression_string
     t[0] = t[1]
 
@@ -376,9 +447,15 @@ def p_expression_call(t):
     t[0] = AST.expression_call(t[1], t[3], t.lexer.lineno)
 
 
+# For accessing an attribute on a class 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[2])
+
+# For recognizing "this." syntax
+def p_expression_this_attribute(t):
+    'expression_this_attribute : THIS DOT IDENT'
+    t[0] = AST.attribute(t[3], t.lexer.lineno)
 
 
 def p_expression_binop(t):

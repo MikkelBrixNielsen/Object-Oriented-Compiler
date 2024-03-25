@@ -23,6 +23,7 @@ class Op(Enum):
     TYPE = auto()       # specifies that type for function and type infront of variable declaration lists should be printed
     EOL = auto()        # End of line (appends ";")
     RET = auto()
+    INDENT = auto()
     VARLIST = auto()
     PARAMS = auto()
     ASSIGN = auto()
@@ -34,6 +35,7 @@ class Op(Enum):
     CALLEND = auto()
     CLASS = auto()
     CLASSMID = auto()
+    THIS = auto()
 
 
     PRINTSTART = auto()
@@ -43,11 +45,6 @@ class Op(Enum):
     COMMA = auto()
     RAW = auto()        # direct print
 
-
-#class T(Enum):  
-#    """Defined vairous types"""
-#    INT = "int"
-#    FLOAT = "float"
 
 class Ins:
     """Representation of an instruction with an opcode, a number of
@@ -77,13 +74,22 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.TYPE, t.type))
 
     def midVisit_variables_declaration_list(self, t):
-        self._app(Ins(Op.EOL, t.type))
+        self._app(Ins(Op.EOL))
 
     def preVisit_variables_list(self, t):
         self._app(Ins(Op.VARLIST, t.variable, t.next))
 
+
+
+
     def preVisit_statement_assignment(self, t):
-        self._app(Ins(Op.ASSIGN, t.lhs))
+        self._app(Ins(Op.INDENT))
+        
+    def midVisit_statement_assignment(self, t):
+        lhs = ""
+        if isinstance(t.lhs , str): # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
+            lhs = t.lhs
+        self._app(Ins(Op.ASSIGN, lhs))
 
     def postVisit_statement_assignment(self, t):
         self._app(Ins(Op.EOL))
@@ -96,9 +102,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_statement_print(self, t):
         self._app(Ins(Op.PRINTSTART, t.exp.type))
-
-    # FIXME - FIGURE OUT WHAT TYPE THE EXPRESSION BEING PRINTED IS 
-    # And add the type of a function to the symbol table so it can be looked up
 
     def postVisit_statement_print(self, t):
         self._app(Ins(Op.PRINTEND))
@@ -120,14 +123,37 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.STR, t.string))
     """
 
-
+    def postVisit_attribute(self, t):
+        self._app(Ins(Op.THIS))
+        self._app(Ins(Op.RAW, t.attr))
 
     def preVisit_class_declaration(self, t):
         self._app(Ins(Op.CLASS, t.name))
 
-
-    def midVisit_class_declaration(self, t):
+    def midVisit_class_descriptor(self, t):
         self._app(Ins(Op.CLASSMID, t.name))
+
+    def preVisit_method(self, t):
+        t.name = t.parent + "_" + t.name
+        self.preVisit_function(t)
+    
+    def midVisit_method(self, t):
+        self.midVisit_function(t)
+
+    def postVisit_method(self, t):
+        self.postVisit_function(t)
+    
+    def preVisit_attributes_declaration_list(self, t):
+        self.preVisit_variables_declaration_list(t)
+
+    def midVisit_attributes_declaration_list(self, t):
+        self.midVisit_variables_declaration_list(t)
+
+    def preVisit_attributes_list(self, t):
+        self.preVisit_variables_list(t)
+
+
+
 
 
 

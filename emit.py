@@ -34,7 +34,7 @@ class Emit:
         self.max_width = 80
         self.indent = 4
         self.indent_level = 0
-        self.signatures = []
+        self.signatures = ["\n"]
         self.code = []
 
     def emit(self):
@@ -44,7 +44,7 @@ class Emit:
     def get_code(self):
         self.signatures.append("\n")
         self.signatures += self.code
-        return "".join(self.signatures).replace(";", ";\n").replace("\n\n", "\n")
+        return "".join(self.signatures).replace(";", ";\n")
 
     def _format_comment(self, comment):
         """Formats comments that would make the total line length too large
@@ -96,12 +96,14 @@ class Emit:
                     self._addType(instr)
                 case Op.EOL:
                     self._raw(";")
+                case Op.INDENT:
+                    self._add("")
                 case Op.VARLIST:
                     self._addVar(instr)
                 case Op.PARAMS:
                     self._addParam(instr)
                 case Op.ASSIGN:
-                    self._add(instr.args[0] + " = ")
+                    self._raw(instr.args[0] + " = ")
                 case Op.FUNCSTART:
                     self.indent_level += 1
                     self._raw(" " + instr.args[0] + "(")
@@ -115,7 +117,10 @@ class Emit:
                     self.indent_level +=1
                 case Op.CLASSMID:
                     self.indent_level -= 1
-                    self._add("} " + f"{instr.args[0]} \n")
+                    self._add("} " + f"{instr.args[0]}; \n")
+                case Op.THIS:
+                    self._raw("this->")
+                    pass
                 case Op.SIGNATURE:
                     self._createFunctionSignature(instr)
                 case Op.PRINTSTART:
