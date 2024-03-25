@@ -139,7 +139,11 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_variables_declaration_list(self, t):
         # Pass along its type to the variable declaration lists
-        t.decl.type = t.type
+        if t.type.__class__.__name__ == "instance_of":
+            t.decl.type = t.type.struct
+            t.type = t.type.struct + "*"
+        else:
+            t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
         # if variables_list has a next pass along its type
@@ -171,20 +175,12 @@ class ASTSymbolVisitor(VisitorsBase):
         t.type = value.type
 
     def postVisit_attribute(self, t):
-        print(t)
         value = self._current_scope.lookup(t.attr)
         if not value:
             error_message("Symbol Collection",
                           f"Identifier '{t.attr}' not found.",
                           t.lineno)
         
-
-
-
-
- 
-
-
 
     # make class declaration the descriptor and give class 
     # declaration in lexer a class body instead of descriptor???

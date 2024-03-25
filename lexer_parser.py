@@ -17,12 +17,14 @@ reserved = {
     'this': 'THIS',
     'function': 'FUNCTION',
     'class': 'CLASS',
+    'new' : 'NEW',
     'return': 'RETURN',
     'print': 'PRINT',
     'int': 'INT',
     'float': 'FLOAT',
     'bool': 'BOOL',
     'char': 'CHAR',
+    'instanceOf': 'INSTANCEOF',
     #'string': 'STRING'
 }
 
@@ -190,14 +192,24 @@ def p_variables_declaration_list(t):
     else:
         t[0] = AST.variables_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
 
+
 def p_TYPE(t):
     '''TYPE : INT
             | FLOAT
             | BOOL
-            | CHAR'''
-            # | IDENT''' # FIXME - if the type is ident check if it is a class that has been defined!!
-            #| STRING'''
+            | CHAR
+            | instance_of''' # FIXME - if the type is ident check if it is a class that has been defined!!
+    #      | STRING'''
     t[0] = t[1]
+
+def p_instance_of(t):
+    '''instance_of : INSTANCEOF IDENT'''
+    t[0] = AST.instance_of(t[2], t.lexer.lineno)
+
+
+
+
+
 
 def p_variables_list(t):
     '''variables_list : IDENT
@@ -206,12 +218,6 @@ def p_variables_list(t):
         t[0] = AST.variables_list(t[1], None, t.lexer.lineno)
     else:
         t[0] = AST.variables_list(t[1], t[3], t.lexer.lineno)
-
-
-
-
-
-
 
 def p_optional_class_declaration_list(t):
     '''optional_class_declaration_list : empty
@@ -286,19 +292,21 @@ def p_method(t):
     'method : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
     t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "*this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
 
-
-
-
-
-
-
-
-
-
+# FIXME - NOT implemented or even a part of the descriptor definiton 
 def p_optional_extends(t):
     '''optional_extends : empty'''
                         # | EXTENDS IDENT''' # EXTENDS IDENT, IDENT, IDENT ...
     t[0] = t[1]
+
+
+
+
+
+
+
+
+
+
 
 def p_optional_functions_declaration_list(t):
     '''optional_functions_declaration_list : empty
@@ -339,7 +347,7 @@ def p_statement(t):
                  | statement_assignment
                  | statement_ifthenelse
                  | statement_while
-                 | statement_compound'''
+                 | statement_compound''' # Don't know what this is probably delete
     t[0] = t[1]
 
 
@@ -407,9 +415,31 @@ def p_expression(t):
                   | expression_call
                   | expression_binop
                   | expression_attribute
-                  | expression_this_attribute'''
+                  | expression_this_attribute
+                  | expression_new_instance'''
                  #| expression_string
     t[0] = t[1]
+
+def p_expression_new_instance(t):
+    'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN SEMICOL'
+    t[0] = AST.expression_new_instance(t[2], t[4], t.lexer.lineno)
+
+def p_optional_instance_expression_list(t):
+    '''optional_instance_expression_list : empty
+                                         | instance_expression_list'''
+    t[0] = t[1]
+
+
+def p_instance_expression_list(t):
+    '''instance_expression_list : expression
+                                | expression COMMA instance_expression_list'''
+    if len(t) == 2:
+        t[0] = AST.instance_expression_list(t[1], None, t.lexer.lineno)
+    else:
+        t[0] = AST.instance_expression_list(t[1], t[3], t.lexer.lineno)
+
+
+
 
 
 def p_expression_integer(t):

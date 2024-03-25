@@ -37,6 +37,11 @@ class Op(Enum):
     CLASSMID = auto()
     THIS = auto()
 
+    TYPE2 = auto()
+    EOL2 = auto()  
+    VARLIST2 = auto()
+
+
 
     PRINTSTART = auto()
     PRINTEND = auto()
@@ -143,15 +148,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_method(self, t):
         self.postVisit_function(t)
     
+
+
     def preVisit_attributes_declaration_list(self, t):
-        self.preVisit_variables_declaration_list(t)
+        self._app(Ins(Op.TYPE2, t.type))
 
     def midVisit_attributes_declaration_list(self, t):
-        self.midVisit_variables_declaration_list(t)
+        self._app(Ins(Op.EOL2))
 
     def preVisit_attributes_list(self, t):
-        self.preVisit_variables_list(t)
-
+        self._app(Ins(Op.VARLIST2, t.variable, t.next))
 
 
 
@@ -208,7 +214,5 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 self._app(Ins(Op.LTE))
             case ">=":
                 self._app(Ins(Op.GTE))
-
-
 
 

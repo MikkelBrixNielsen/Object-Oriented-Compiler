@@ -35,6 +35,7 @@ class Emit:
         self.indent = 4
         self.indent_level = 0
         self.signatures = ["\n"]
+        self.classes = []
         self.code = []
 
     def emit(self):
@@ -43,7 +44,8 @@ class Emit:
 
     def get_code(self):
         self.signatures.append("\n")
-        self.signatures += self.code
+        self.classes.append("\n")
+        self.signatures += self.classes + self.code
         return "".join(self.signatures).replace(";", ";\n")
 
     def _format_comment(self, comment):
@@ -72,8 +74,14 @@ class Emit:
     def _raw(self, s):
         self.code.append(s)
 
+    def _raw2(self, s):
+        self.classes.append(s)
+
     def _add(self, s, comment=""):
         self._addAux(s, self.code, comment)
+
+    def _add2(self, s, comment=""):
+        self._addAux(s, self.classes, comment)
 
     def _addSignature(self, s, comment=""):
         temp = self.indent_level
@@ -93,13 +101,16 @@ class Emit:
         else:
             match instr.opcode:
                 case Op.TYPE:
-                    self._addType(instr)
+                    self._addType(instr, "1")
                 case Op.EOL:
                     self._raw(";")
                 case Op.INDENT:
                     self._add("")
                 case Op.VARLIST:
-                    self._addVar(instr)
+                    s = instr.args[0]
+                    if instr.args[1]:
+                        s += ","
+                    self._raw(" " + s)
                 case Op.PARAMS:
                     self._addParam(instr)
                 case Op.ASSIGN:
@@ -112,12 +123,35 @@ class Emit:
                 case Op.FUNCEND:
                     self.indent_level -= 1
                     self._add("}\n\n")
+                
+
+
+
+                # FIXME - THIS IS FUCKING SHIT ADD2!??!?!? raw2 ?!?!?! WHAT EVEN IS THIS GARBAGE!?!?!?!?!
                 case Op.CLASS:
-                    self._add(f"typedef struct {instr.args[0]}" + " {\n")
+                    self._createClassSignature(instr)
+                    self._add2(f"struct {instr.args[0]}" + " {\n")
                     self.indent_level +=1
                 case Op.CLASSMID:
                     self.indent_level -= 1
-                    self._add("} " + f"{instr.args[0]}; \n")
+                    self._add2("};\n")
+                case Op.TYPE2:
+                    self._addType(instr, "2")
+                case Op.EOL2:
+                    self._raw2(";")
+                case Op.VARLIST2:
+                    s = instr.args[0]
+                    if instr.args[1]:
+                        s += ","
+                    self._raw2(" " + s)
+
+
+
+
+
+
+
+
                 case Op.THIS:
                     self._raw("this->")
                     pass
@@ -144,19 +178,24 @@ class Emit:
     def _simpleInstruction(self, instr):
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
-    def _addType(self, instr):
+
+    # FIXME - WHAT EVEN THE FUCK IS THIS DUPLICATED CASES WHAT THE ACTUAL FUCKING SHIT IS THIS OMG I HATE IT SO MUCH FUCKING FIX THIS EXTREME PILE OF DOGSHIT
+    def _addType(self, instr, flag):
         type = instr.args[0]
-        match type:
-            case "int" | "float" | "char" | "string": 
-                self._add(type)
-            case "bool":
-                self._add("int", "Were boolean variables in source code")
-    
-    def _addVar(self, instr):
-        s = instr.args[0]
-        if instr.args[1]:
-            s += ","
-        self._raw(" " + s)
+        if flag == "1":
+            match type:
+                case "bool":
+                    self._add("int", "Were boolean variables in source code")
+                case _:
+                    self._add(type)
+        else:
+            match type:
+                case "bool":
+                    self._add2("int", "Were boolean variables in source code")
+                case _:
+                    self._add2(type)
+
+
 
     def _addParam(self, instr):
         s = instr.args[0] + " " + instr.args[1]
@@ -170,6 +209,9 @@ class Emit:
             s = instr.args[0] + " " + instr.args[1] + "(" + params + ");"
             self._addSignature(s)
 
+    def _createClassSignature(self, instr):
+        self._addSignature(("typedef struct " + (instr.args[0] + " ")*2)[:-1] + ";")
+
     def _formatParams(self, params):
         current = params
         s = ""
@@ -179,3 +221,5 @@ class Emit:
                 s += ", "
             current = current.next
         return s
+    
+    

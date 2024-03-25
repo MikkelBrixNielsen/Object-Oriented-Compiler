@@ -362,6 +362,20 @@ class assignment_list:
             self.next.accept(visitor)
 
 @dataclass
+class expression_new_instance:
+    struct: Any
+    params: Any
+    lineno: int
+
+
+    # FIXME - Probably need more than a post visit but idk ask someone smarter???
+    def accept(self, visitor):
+        visitor.postVisit(self)
+
+
+
+
+@dataclass
 class expression_integer:
     integer: int
     lineno: int
@@ -452,7 +466,6 @@ class expression_list:
     exp: Any
     next: Any
     lineno: int
-    type: Any = field(default=None)
 
     def accept(self, visitor):
         visitor.preVisit(self)
@@ -461,3 +474,30 @@ class expression_list:
         if self.next:
             self.next.accept(visitor)
         visitor.postVisit(self)
+
+@dataclass
+class instance_expression_list:
+    exp: Any
+    next: Any
+    lineno: int
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        self.exp.accept(visitor)
+        visitor.midVisit(self)
+        if self.next:
+            self.next.accept(visitor)
+        visitor.postVisit(self)
+
+@dataclass
+class instance_of:
+    struct: Any
+    lineno: int
+
+    # FIXME - NEEDS SOMETHING HERE ASK STEFFEN?????? - HEY STEFFEN? HVAD SKAL DER VÆRE HER?
+    # When doing varlist visit if variable is an instanceOf 
+    # then extract the string part aka struct and replace 
+    # variable with that so that all other type calculations 
+    # work the same as for the other types   
+    def accept(self, visitor):
+        pass
