@@ -20,7 +20,7 @@ class Scope(Enum):
 
 
 class SymVal():
-    """The information for a name (symbol) is its category together with
+    """The information for a name (symbol) is its category together ith
        supplementary information.
     """
     def __init__(self, cat, type, level, info):
@@ -51,7 +51,7 @@ class SymbolTable:
             return self._tab[name]
         else:
             return None
-
+        
 
 # Symbol Collection
 
@@ -139,11 +139,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_variables_declaration_list(self, t):
         # Pass along its type to the variable declaration lists
-        if t.type.__class__.__name__ == "instance_of":
-            t.decl.type = t.type.struct
-            t.type = t.type.struct + "*"
-        else:
-            t.decl.type = t.type
+        t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
         # if variables_list has a next pass along its type
@@ -218,9 +214,6 @@ class ASTSymbolVisitor(VisitorsBase):
 
 
 
-    # FIXME - Record attributes in symbol table
-            # Look at how variable list does this
-            # When looking for attribtues using "this." syntax or similar go to scope_level == 1 (this should be the class)
     def preVisit_attributes_declaration_list(self, t):
         t.decl.name = t.name
         t.decl.type = t.type
@@ -236,13 +229,17 @@ class ASTSymbolVisitor(VisitorsBase):
         value.info[0].append((t.variable, t.type))
         self._record_variables(t, NameCategory.ATTRIBUTE, t.name) # maybe name is useless
 
+
+
+
+
     def preVisit_methods_declaration_list(self, t):
         t.decl.parent = t.parent
         if t.next:
             t.next.parent = t.parent
 
     def preVisit_method(self, t):
-        t.par_list.type = t.parent # sets the reference to the class it belongs to 
+        t.par_list.type = t.parent + "*" # sets the reference to the class it belongs to
         self.preVisit_function(t)
         value = self._current_scope.lookup(t.parent)
         value.info[1].append((t.name, t.type, t.par_list))
@@ -253,6 +250,25 @@ class ASTSymbolVisitor(VisitorsBase):
     def postVisit_method(self, t):
         self.postVisit_function(t)
 
+
+
+
+
+
+
+    def preVisit_statement_assignment(self, t):
+        if t.rhs.__class__.__name__ == "expression_new_instance":
+            t.rhs.identifier = t.lhs
+
+    def preVisit_expression_new_instance(self, t):
+        t.params.struct = t.identifier
+
+    def preVisit_instance_expression_list(self, t):
+        # Assigns the struct each expression relates to
+        if t.next:
+            t.next.struct = t.struct
+        # Assigns types to the parameters
+        t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
 
 
@@ -274,5 +290,3 @@ class ASTSymbolVisitor(VisitorsBase):
     Class_declaration
     Classes in symbol table
     """
-
-

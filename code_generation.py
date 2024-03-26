@@ -36,6 +36,8 @@ class Op(Enum):
     CLASS = auto()
     CLASSMID = auto()
     THIS = auto()
+    INSTANCE = auto()
+    ATTRASSIGN = auto()
 
     TYPE2 = auto()
     EOL2 = auto()  
@@ -144,6 +146,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     
     def midVisit_method(self, t):
         self.midVisit_function(t)
+        
 
     def postVisit_method(self, t):
         self.postVisit_function(t)
@@ -180,8 +183,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if not t.name == "global":
             self._app(Ins(Op.FUNCEND))
 
+
+
+
+
     def preVisit_parameter_list(self, t):
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
+
+
+
+
 
     def preVisit_expression_call(self, t):
         self._app(Ins(Op.CALLSTART, t.name))
@@ -215,4 +226,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             case ">=":
                 self._app(Ins(Op.GTE))
 
+    def preVisit_expression_new_instance(self, t):
+        self._app(Ins(Op.INSTANCE, t.struct))
 
+    def preVisit_instance_expression_list(self, t):
+        self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
+        # do something cool about assigning attributes to the newly created struct or smth idk ask steffen he might know
+
+    def midVisit_instance_expression_list(self, t):
+        if t.next:
+            self._app(Ins(Op.EOL))
+
+    def postVisit_instance_expression_list(self, t):
+        # find the value of the parameter if given or assign default value
+        # might be more ideal to do this else where but idk ask steffen
+        pass

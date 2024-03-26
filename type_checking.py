@@ -2,7 +2,6 @@ from visitors_base import VisitorsBase
 from errors import error_message
 from symbols import NameCategory
 
-
 class ASTTypeCheckingVisitor(VisitorsBase):
     def __init__(self):
         self._current_scope = None
@@ -13,6 +12,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     def postVisit_function(self, t):
         self._current_scope = self._current_scope.parent
+        if not t.name == "global": 
+            current = t.body.stm_list
+            while current.next:
+                current = current.next
+            if not current.stm.exp.type == t.type:
+                error_message("Type Checking",
+                              f"Type of function and return statement does not match.",
+                              t.lineno)
 
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
@@ -38,7 +45,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t_rhs = self.get_type(t.rhs)
 
         if not lhs:
-            error_message("Symbol Collection",
+            error_message("Type Checking",
                           f"Variable '{t.lhs}' not found.",
                           t.lineno)
         if lhs.cat == NameCategory.PARAMETER:
@@ -59,7 +66,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_identifier(self, t):
         value = self._current_scope.lookup(t.identifier)
         if not value:
-            error_message("Symbol Collection",
+            error_message("Type Checking",
                           f"Identifier '{t.identifier}' not found.",
                           t.lineno)
         if value.cat == NameCategory.FUNCTION:
@@ -68,18 +75,17 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 f"Function name '{t.identifier}' cannot be an identifier.",
                 t.lineno)
 
-
     def preVisit_expression_call(self, t):
         self.number_of_actual_parameters.append(0)
 
     def postVisit_expression_call(self, t):
         value = self._current_scope.lookup(t.name)
         if not value:
-            error_message("Symbol Collection",
+            error_message("Type Checking",
                           f"Function '{t.name}' not found.",
                           t.lineno)
         elif value.cat != NameCategory.FUNCTION:
-            error_message("Symbol Collection",
+            error_message("Type Checking",
                           f"Identifier '{t.name}' is not a function.",
                           t.lineno)
         node = value.info
@@ -92,6 +98,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"'{t.name}' was called with too many parameters.",
                           t.lineno)
         self.number_of_actual_parameters.pop()
+        # FIXME - Check parameter types actually match was is needed compared to what was given :))
 
     def midVisit_expression_list(self, t):
         self.number_of_actual_parameters[-1] += 1
@@ -99,8 +106,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_binop(self, t):
         t.type = self.get_effective_type(self.get_type(t.lhs), self.get_type(t.rhs), t)
 
+
+
     def get_type(self, t):
           match t.__class__.__name__:
+            case "expression_new_instance":
+                  return t.struct + "*"
             case "expression_binop":
                 return self.get_effective_type(self.get_type(t.lhs), self.get_type(t.rhs), t)
             case "expression_call":
@@ -112,10 +123,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "expression_identifier":
                 return self._current_scope.lookup(t.identifier).type
             case "expression_group":
-                # FIXME - evaluate expression groupe somehow or remove it from program in its entirity
+                # FIXME - evaluate expression group somehow or remove it from program in its entirity
                 return None
             case _:
                   error_message("Type Checking", f"get_type does not implement {t.__class__.__name__}", t.lineno)
+
 
 
     # FIXME - figure out if it is needed to check which operation is performed
@@ -133,25 +145,57 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                     return "int"
                 else: 
                     return "float"
-                """
-                match type1+type2:
-                    case "intfloat" | "floatint":
-                        return "float"
-                    case "intint":
-                        return "int"
-                    case "floatfloat":
-                        return "float"
-                    case "charint"
-                        return "char"
-                    case "intchar"
-                        return "char"
-                    case "charchar"
-                        return "char"
-                    # FIXME - IMPLEMENT FOR CHARS AND BOOLS
-                    case _: # Default case throwss erros since not implemented / allowed
-                        error_message("Type Checking", f"{t.op} is not defined for {type1} and {type2}", t.lineno)
-                """
+                
 # FIXME     Something seems off with line numbers 
             # line number for some reason points 
             # to the next line of code after the 
             # line where the error actually occurred
+                
+    def postVisit_expression_new_instance(self, t):
+        value = self._current_scope.lookup(t.struct)
+        if not value:
+            error_message("Type Checking",
+                          f"Class {t.struct} not found.",
+                          t.lineno)
+        elif not value.cat == NameCategory.CLASS:
+            error_message("Type Checking",
+                          f"Identifier {t.struct} is not a class.",
+                          t.lineno)
+        num_given_params = self._getLen(t.params)
+        num_actual_params = len(value.info[0])
+        if num_actual_params < num_given_params:
+            error_message("Type Checking",
+                          f"Constructor was called with too many argumnets.",
+                          t.lineno)
+        elif num_actual_params > num_given_params:
+            error_message("Type Checking",
+                          f"Constructor was called with too few arguments.",
+                          t.lineno)
+        elif not self._param_type_match(value.info[0], t.params):
+            error_message("Type Checking",
+                          f"Type of parameters given does not match parameters needed.",
+                          t.lineno)
+        
+        # if everything checks out maybe do something cool???
+            
+
+
+
+
+    def _getLen(self, params):
+        num_params = 0
+        current = params
+        while current:
+            num_params += 1
+            current = current.next
+        return num_params
+    
+    def _param_type_match(self, a, b):
+        matches = 0
+        i = 0
+        while i < len(a) and b and a[i][1] == b.exp.type:
+            b.param = a[i][0] # assigns given param to actual param
+            matches += 1
+            b = b.next
+            i += 1
+        return len(a) == matches

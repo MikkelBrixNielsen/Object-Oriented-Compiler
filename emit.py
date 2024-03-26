@@ -1,7 +1,7 @@
 
 # This module takes the intermediate code and outputs C code.
 
-from code_generation import Op #, T
+from code_generation import Op
 
 _intermediate_to_C = {
     Op.ADD: "+",
@@ -34,6 +34,7 @@ class Emit:
         self.max_width = 80
         self.indent = 4
         self.indent_level = 0
+        self.includes = ["#include <stdlib.h>", "\n#include <stdio.h>"]
         self.signatures = ["\n"]
         self.classes = []
         self.code = []
@@ -43,10 +44,11 @@ class Emit:
             self._dispatch(instruction)
 
     def get_code(self):
+        self.includes.append("\n")
         self.signatures.append("\n")
         self.classes.append("\n")
-        self.signatures += self.classes + self.code
-        return "".join(self.signatures).replace(";", ";\n")
+        self.includes += self.signatures + self.classes + self.code
+        return "".join(self.includes).replace(";", ";\n")
 
     def _format_comment(self, comment):
         """Formats comments that would make the total line length too large
@@ -145,7 +147,12 @@ class Emit:
                         s += ","
                     self._raw2(" " + s)
 
+                case Op.INSTANCE:
+                    struct = instr.args[0]
+                    self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
 
+                case Op.ATTRASSIGN:
+                    self._add(f"{instr.args[0]}->{instr.args[2]} = ")
 
 
 

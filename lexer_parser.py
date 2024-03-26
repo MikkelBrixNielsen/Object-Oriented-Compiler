@@ -176,7 +176,7 @@ def p_assignment_list(t):
 # MAKE IT SO RETURN IS REQUIRED BY FUNCTIONS WHICH AREN'T GLOLAL FUNCTION
 # FIXME - includes instance syntax and this. syntax the latter should only be allowed in classes though
 def p_body(t):
-    'body : optional_variables_declaration_list optional_statement_list optional_functions_declaration_list optional_statement_list'
+    'body : optional_variables_declaration_list optional_functions_declaration_list optional_statement_list'
     t[0] = AST.body(t[1], t[2], t[3], t.lexer.lineno)
 
 def p_optional_variables_declaration_list(t):
@@ -204,7 +204,7 @@ def p_TYPE(t):
 
 def p_instance_of(t):
     '''instance_of : INSTANCEOF IDENT'''
-    t[0] = AST.instance_of(t[2], t.lexer.lineno)
+    t[0] = t[2] + "*"
 
 
 
@@ -290,7 +290,7 @@ def p_methods_declaration_list(t):
 
 def p_method(t):
     'method : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
-    t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "*this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
+    t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
 
 # FIXME - NOT implemented or even a part of the descriptor definiton 
 def p_optional_extends(t):
@@ -421,7 +421,7 @@ def p_expression(t):
     t[0] = t[1]
 
 def p_expression_new_instance(t):
-    'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN SEMICOL'
+    'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN'
     t[0] = AST.expression_new_instance(t[2], t[4], t.lexer.lineno)
 
 def p_optional_instance_expression_list(t):
