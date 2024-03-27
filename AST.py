@@ -260,7 +260,28 @@ class attribute:
 class expression_attribute:
     inst: Any
     field: Any
+    lineno: Any
     type: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.postVisit(self)
+
+@dataclass
+class expression_method:
+    inst: Any
+    name: Any
+    params: Any
+    lineno: Any
+    type: Any = field(default=None)
+
+
+    def accept(self, visitor):
+        visitor.postVisit(self)
+
+
+
+
+
 
 
 

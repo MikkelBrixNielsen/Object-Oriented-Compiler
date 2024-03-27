@@ -11,7 +11,7 @@ from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
 
-__version__ = "1.2.3"
+__version__ = "1.0.0"
 
 
 # MAIN

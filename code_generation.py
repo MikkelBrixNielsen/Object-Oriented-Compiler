@@ -241,3 +241,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         # find the value of the parameter if given or assign default value
         # might be more ideal to do this else where but idk ask steffen
         pass
+    
+    def postVisit_expression_attribute(self, t):
+        self._app(Ins(Op.RAW, t.inst + "->" + t.field))
+
+
+        

@@ -122,6 +122,8 @@ class ASTSymbolVisitor(VisitorsBase):
         self._current_scope = self._current_scope.parent
         self._current_level -= 1
 
+        
+
     def preVisit_parameter_list(self, t):
         # Recording formal parameter names in the symbol table:
         if self._current_scope.lookup_this_scope(t.parameter):
@@ -261,7 +263,8 @@ class ASTSymbolVisitor(VisitorsBase):
             t.rhs.identifier = t.lhs
 
     def preVisit_expression_new_instance(self, t):
-        t.params.struct = t.identifier
+        if t.params:
+            t.params.struct = t.identifier
 
     def preVisit_instance_expression_list(self, t):
         # Assigns the struct each expression relates to
@@ -269,12 +272,6 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.struct = t.struct
         # Assigns types to the parameters
         t.exp.type = self._current_scope.lookup(t.exp.identifier).type
-
-
-
-
-
-
 
 
 

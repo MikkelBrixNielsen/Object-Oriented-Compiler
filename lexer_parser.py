@@ -203,8 +203,8 @@ def p_TYPE(t):
     t[0] = t[1]
 
 def p_instance_of(t):
-    '''instance_of : INSTANCEOF IDENT'''
-    t[0] = t[2] + "*"
+    '''instance_of : INSTANCEOF LPAREN IDENT RPAREN'''
+    t[0] = t[3] + "*"
 
 
 
@@ -416,6 +416,7 @@ def p_expression(t):
                   | expression_binop
                   | expression_attribute
                   | expression_this_attribute
+                  | expression_method
                   | expression_new_instance'''
                  #| expression_string
     t[0] = t[1]
@@ -477,10 +478,35 @@ def p_expression_call(t):
     t[0] = AST.expression_call(t[1], t[3], t.lexer.lineno)
 
 
+
+
+
+
+
+
+
+
+
 # For accessing an attribute on a class 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
-    t[0] = AST.expression_attribute(t[1], t[2])
+    t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
+
+
+def p_expression_method(t):
+    'expression_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'
+    t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
+
+
+
+
+
+
+
+
+
+
+
 
 # For recognizing "this." syntax
 def p_expression_this_attribute(t):

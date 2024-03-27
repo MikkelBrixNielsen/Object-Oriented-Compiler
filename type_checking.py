@@ -13,13 +13,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_function(self, t):
         self._current_scope = self._current_scope.parent
         if not t.name == "global": 
-            current = t.body.stm_list
-            while current.next:
-                current = current.next
-            if not current.stm.exp.type == t.type:
-                error_message("Type Checking",
-                              f"Type of function and return statement does not match.",
-                              t.lineno)
+           self._function_type_match_return_type(t)
 
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
@@ -42,8 +36,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         else: 
             lhs = self._current_scope.lookup(t.lhs)
 
-        t_rhs = self.get_type(t.rhs)
-
+        t_rhs = self._get_type(t.rhs)
         if not lhs:
             error_message("Type Checking",
                           f"Variable '{t.lhs}' not found.",
@@ -59,6 +52,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         # check whether what is being assigned has the same type as what is being assigned to
         t_lhs = lhs.type
         if not t_lhs == t_rhs:
+            # FIXME - I REALLY DON'T LIKE THAT A FUCNTIONS RETURN TYPE IS CHECKED HERE BUT MAYBE 
+            # THAT IS OKAY IDK THIS SEEMS REALLY BAD SINCE IT IS THEN CHECKED AGIAN WHEN THE 
+            # FUCNTION IS ACTUALLY VISITED FOR TYPE CHECKING AND THAT JUST SEEMS A LITTLE "NEDEREN"
+            # BUT IDK MAYBE ASK STEFFEN HE MIGHT KNOW SOMETHING COOL
+            self._function_type_match_return_type(self._current_scope.lookup(t.rhs.name).info)
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
                           t.rhs.lineno)
@@ -104,52 +102,16 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         self.number_of_actual_parameters[-1] += 1
 
     def postVisit_expression_binop(self, t):
-        t.type = self.get_effective_type(self.get_type(t.lhs), self.get_type(t.rhs), t)
+        t.type = self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
 
 
 
-    def get_type(self, t):
-          match t.__class__.__name__:
-            case "expression_new_instance":
-                  return t.struct + "*"
-            case "expression_binop":
-                return self.get_effective_type(self.get_type(t.lhs), self.get_type(t.rhs), t)
-            case "expression_call":
-                return self._current_scope.lookup(t.name).type
-            case "attribute":
-                  return self._current_scope.parent.lookup_this_scope(t.attr).type
-            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char":
-                return t.type
-            case "expression_identifier":
-                return self._current_scope.lookup(t.identifier).type
-            case "expression_group":
-                # FIXME - evaluate expression group somehow or remove it from program in its entirity
-                return None
-            case _:
-                  error_message("Type Checking", f"get_type does not implement {t.__class__.__name__}", t.lineno)
 
 
 
-    # FIXME - figure out if it is needed to check which operation is performed
-    def get_effective_type(self, type1, type2, t):
-        match t.op:
-            case "==" | "!=" | "<" | ">" | "<=" | ">=":
-                if type1 and type2:
-                    return "int"
-                else:
-                    error_message("Type Checking",
-                                  f"None type detected - please fix.",
-                                  t.lineno)
-            case "/" | "*" | "+" | "-":
-                if type1 == "int" and type2 == "int":
-                    return "int"
-                else: 
-                    return "float"
-                
-# FIXME     Something seems off with line numbers 
-            # line number for some reason points 
-            # to the next line of code after the 
-            # line where the error actually occurred
+
+
+    
                 
     def postVisit_expression_new_instance(self, t):
         value = self._current_scope.lookup(t.struct)
@@ -180,8 +142,23 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             
 
 
+    def postVisit_expression_attribute(self, t):
+        t.type = self._get_type(t)
+            
+    def postVisit_expression_method(self, t):
+        t.type = self._get_type(t)
 
 
+
+
+
+
+
+
+
+
+
+    # The auxiliaries
     def _getLen(self, params):
         num_params = 0
         current = params
@@ -199,3 +176,110 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             b = b.next
             i += 1
         return len(a) == matches
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def _function_type_match_return_type(self, t):
+        current = t.body.stm_list
+        while current.next:
+            current = current.next
+        if not current.stm.exp.type == t.type:
+            error_message("Type Checking",
+                          f"Type of function and return statement does not match.",
+                          t.lineno)
+    
+
+    def _get_type(self, t):
+          match t.__class__.__name__:
+            case "expression_new_instance":
+                return t.struct + "*"
+
+
+
+
+            # Collapse the code of these two cases they are VERY similar
+            case "expression_attribute":
+                val = self._current_scope.lookup(t.inst).type[:-1]
+                cd = self._current_scope.lookup(val).info[0]
+                for attr in cd:
+                    if t.field == attr[0]:
+                        return attr[1]
+            case "expression_method":
+                val = self._current_scope.lookup(t.inst).type[:-1]
+                cd = self._current_scope.lookup(val).info[1]
+                for meth in cd:
+                    if t.name == meth[0]:
+                        return meth[1]
+
+
+
+
+                return self._current_scope.lookup(t.field).type
+            case "expression_binop":
+                return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
+            case "expression_call":
+                return self._current_scope.lookup(t.name).type
+            case "attribute":
+                return self._current_scope.parent.lookup_this_scope(t.attr).type
+            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char":
+                return t.type
+            case "expression_identifier":
+                return self._current_scope.lookup(t.identifier).type
+            case "expression_group":
+                # FIXME - evaluate expression group somehow or remove it from program in its entirity
+                return None
+            case _:
+                  error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
+
+
+
+    # FIXME - figure out if it is needed to check which operation is performed
+    def _get_effective_type(self, type1, type2, t):
+        match t.op:
+            # These operators return a truth value which is represented as an integer
+            case "==" | "!=" | "<" | ">" | "<=" | ">=":
+                if type1 and type2:
+                    return "int"
+                else:
+                    error_message("Type Checking",
+                                  f"None type detected.",
+                                  t.lineno)
+            case "/" | "*" | "+" | "-":
+                if type1 == "int" and type2 == "int":
+                    return "int"
+                else: 
+                    return "float"
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ # FIXME     Something seems off with line numbers 
+            # line number for some reason points 
+            # to the next line of code after the 
+            # line where the error actually occurred
