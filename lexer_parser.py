@@ -25,6 +25,7 @@ reserved = {
     'bool': 'BOOL',
     'char': 'CHAR',
     'instanceOf': 'INSTANCEOF',
+    'extends': 'EXTENDS'
     #'string': 'STRING'
 }
 
@@ -294,11 +295,13 @@ def p_method(t):
 
 # FIXME - NOT implemented or even a part of the descriptor definiton 
 def p_optional_extends(t):
-    '''optional_extends : empty'''
-                        # | EXTENDS IDENT''' # EXTENDS IDENT, IDENT, IDENT ...
-    t[0] = t[1]
-
-
+    '''optional_extends : empty
+                        | EXTENDS IDENT'''
+                        # FIXME| EXTENDS ident_list''' # EXTENDS IDENT, IDENT, IDENT ...
+    if len(t) == 2:
+        t[0] = t[1]
+    else:
+        t[0] = t[2] 
 
 
 
@@ -368,6 +371,7 @@ def p_statement_assignment(t):
 def p_lhs(t): # make this more uniform so that the other phases have a similar interface to interact with attributes, identifers and whatever else might come
     '''lhs : IDENT
            | THIS DOT IDENT'''
+        #  | FIXME IDENT DOT IDENT # Instance acces assignemnt 
     if len(t) == 2:
         t[0] = t[1]
     else: 

@@ -68,7 +68,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     """Implements the intermediate code generation from the AST."""
     def __init__(self):
         self._current_scope = None
-        self._function_stack = []    
         self._code = []
 
     def get_code(self):
@@ -135,7 +134,34 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, t.attr))
 
     def preVisit_class_declaration(self, t):
+        # FIXME if multi-inheritance is implemented change this to be compatible 
+        if t.extends:
+            self._extend_class(t)
         self._app(Ins(Op.CLASS, t.name))
+
+
+
+
+
+
+
+
+    # FIXME Make it so code is generated for the extensions 
+    def _extend_class(self, t):
+        pass
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def midVisit_class_descriptor(self, t):
         self._app(Ins(Op.CLASSMID, t.name))

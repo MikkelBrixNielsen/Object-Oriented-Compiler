@@ -15,8 +15,34 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         if not t.name == "global": 
            self._function_type_match_return_type(t)
 
+
+    # FIXME What should happen if a class tires to extend itself (just don't allow?)
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
+        # checks if the extensions is actually a class 
+        # FIXME If multi-inheritance is implemented expand this to check all the extensions 
+        super = t.extends
+        if super:
+            if super == t.name:
+                error_message("Type Checking.",
+                              f"{t.name} cannot have itself as an extension.",
+                              t.lineno)
+            cat = self._current_scope.lookup(super).cat
+            if not NameCategory.CLASS == cat:
+                cat = str(cat).split(".")[-1].lower()
+                error_message("Type Checking.",
+                            f"{t.name} can only extend other classes {super} is a {cat}.",
+                            t.lineno)
+            self._extend(t)
+
+    # FIXME If multi-inheritance is implemented make this support that
+    def _extend(self, t):
+        ext = self._current_scope.lookup(t.extends)
+        this = self._current_scope.lookup(t.name)
+        # FIXME If multi-inheritance make this append to the specific extensions list and not just the classes list of extensions
+        if ext:
+            this.info[2].append(ext.info)
+
 
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
@@ -177,21 +203,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             i += 1
         return len(a) == matches
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def _function_type_match_return_type(self, t):
         current = t.body.stm_list
         while current.next:
@@ -202,32 +213,32 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
     
 
+    def _get_type_of_class(self, t, cat):
+        idx = None
+        if cat == "attribute":
+            idx = 0
+        elif cat == "method":
+            idx = 1
+        if idx == None:
+            print("Type Checking\n" + 
+                  "Category given to find type of class resulted in None index")
+            return # FIXME This might be very illegal IDK ask Steffen
+        val = self._current_scope.lookup(t.inst).type[:-1]
+        cd = self._current_scope.lookup(val).info[idx]
+        for elem in cd:
+            if t.field == elem[0]:
+                return elem[1]
+
+
+
     def _get_type(self, t):
           match t.__class__.__name__:
             case "expression_new_instance":
                 return t.struct + "*"
-
-
-
-
-            # Collapse the code of these two cases they are VERY similar
             case "expression_attribute":
-                val = self._current_scope.lookup(t.inst).type[:-1]
-                cd = self._current_scope.lookup(val).info[0]
-                for attr in cd:
-                    if t.field == attr[0]:
-                        return attr[1]
+                return self._get_type_of_class(t, "attribute")
             case "expression_method":
-                val = self._current_scope.lookup(t.inst).type[:-1]
-                cd = self._current_scope.lookup(val).info[1]
-                for meth in cd:
-                    if t.name == meth[0]:
-                        return meth[1]
-
-
-
-
-                return self._current_scope.lookup(t.field).type
+                return self._get_type_of_class(t, "method")
             case "expression_binop":
                 return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
             case "expression_call":
@@ -257,6 +268,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                     error_message("Type Checking",
                                   f"None type detected.",
                                   t.lineno)
+                    
+            # FIXME Maybe check for None type here as well or just do it in general before the match IDK ask Steffen
             case "/" | "*" | "+" | "-":
                 if type1 == "int" and type2 == "int":
                     return "int"

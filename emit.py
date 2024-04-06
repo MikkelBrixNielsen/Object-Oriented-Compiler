@@ -185,7 +185,6 @@ class Emit:
     def _simpleInstruction(self, instr):
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
-
     # FIXME - WHAT EVEN THE FUCK IS THIS DUPLICATED CASES WHAT THE ACTUAL FUCKING SHIT IS THIS OMG I HATE IT SO MUCH FUCKING FIX THIS EXTREME PILE OF DOGSHIT
     def _addType(self, instr, flag):
         type = instr.args[0]
@@ -201,8 +200,6 @@ class Emit:
                     self._add2("int", "Were boolean variables in source code")
                 case _:
                     self._add2(type)
-
-
 
     def _addParam(self, instr):
         s = instr.args[0] + " " + instr.args[1]

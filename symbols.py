@@ -122,8 +122,6 @@ class ASTSymbolVisitor(VisitorsBase):
         self._current_scope = self._current_scope.parent
         self._current_level -= 1
 
-        
-
     def preVisit_parameter_list(self, t):
         # Recording formal parameter names in the symbol table:
         if self._current_scope.lookup_this_scope(t.parameter):
@@ -183,7 +181,7 @@ class ASTSymbolVisitor(VisitorsBase):
     # make class declaration the descriptor and give class 
     # declaration in lexer a class body instead of descriptor???
     def preVisit_class_declaration(self, t):
-        info = [[],[]]
+        info = [[],[],[t.extends]]
         if self._current_scope.lookup_this_scope(t.name):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
@@ -213,9 +211,6 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.methods:
             t.methods.parent = t.name
 
-
-
-
     def preVisit_attributes_declaration_list(self, t):
         t.decl.name = t.name
         t.decl.type = t.type
@@ -229,11 +224,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
         value = self._current_scope.lookup(t.name)
         value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ATTRIBUTE, t.name) # maybe name is useless
-
-
-
-
+        self._record_variables(t, NameCategory.ATTRIBUTE, t.name) # FIXME maybe name is useless
 
     def preVisit_methods_declaration_list(self, t):
         t.decl.parent = t.parent
@@ -252,12 +243,6 @@ class ASTSymbolVisitor(VisitorsBase):
     def postVisit_method(self, t):
         self.postVisit_function(t)
 
-
-
-
-
-
-
     def preVisit_statement_assignment(self, t):
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs
@@ -273,17 +258,7 @@ class ASTSymbolVisitor(VisitorsBase):
         # Assigns types to the parameters
         t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
-
-
-
-
     # Make function part of the structs in C code 
     # Make this.<attr> syntax to differentiat between global variable, parameters, and class attributes
     # Make new syntax work to create class instances 
     # make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
-    """
-    Expression_attribute
-    Figure out how the extends part of a class declaration is going to work
-    Class_declaration
-    Classes in symbol table
-    """
