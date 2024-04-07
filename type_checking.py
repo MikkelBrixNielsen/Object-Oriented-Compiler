@@ -16,6 +16,15 @@ class ASTTypeCheckingVisitor(VisitorsBase):
            self._function_type_match_return_type(t)
 
 
+
+
+
+
+
+
+
+
+
     # FIXME What should happen if a class tires to extend itself (just don't allow?)
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
@@ -24,24 +33,52 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         super = t.extends
         if super:
             if super == t.name:
-                error_message("Type Checking.",
+                error_message("Type Checking",
                               f"{t.name} cannot have itself as an extension.",
                               t.lineno)
-            cat = self._current_scope.lookup(super).cat
-            if not NameCategory.CLASS == cat:
-                cat = str(cat).split(".")[-1].lower()
-                error_message("Type Checking.",
+            super_cd = self._current_scope.lookup(super)
+            if not super_cd:
+                error_message("Type Checking",
+                              f"Class {super} not found - maybe used before declaration.",
+                              t.lineno)
+                
+            if not NameCategory.CLASS == super_cd.cat:
+                cat = str(super_cd.cat).split(".")[-1].lower()
+                error_message("Type Checking",
                             f"{t.name} can only extend other classes {super} is a {cat}.",
                             t.lineno)
-            self._extend(t)
+            self._extend(t, super_cd)
 
     # FIXME If multi-inheritance is implemented make this support that
-    def _extend(self, t):
-        ext = self._current_scope.lookup(t.extends)
+    def _extend(self, t, ext):
         this = self._current_scope.lookup(t.name)
-        # FIXME If multi-inheritance make this append to the specific extensions list and not just the classes list of extensions
-        if ext:
-            this.info[2].append(ext.info)
+
+        # Don't know if this is needed but it's here anyway but 
+        # yeah idk maybe ask Steffen?????
+        if not this:
+            error_message("Type Checking",
+                        f"class '{t.name}' not found.",
+                        t.lineno)
+        #######################################################
+        
+        # FIXME - Correct to only add things from the extension that have not been overwritten
+        # Could be optimized to only look at the elements in the original info and not the updating one
+        for i in range(len(ext.info)):
+            for new_elem in ext.info[i]:
+                found = False
+                if i < 2: # Tuple comparison for attributes and methods
+                    for elem in this.info[i]:
+                        if new_elem[0] == elem[0]:
+                            found = True
+                            break # new_elem was found, so stop looking for it
+                else: # String comparision for extensions
+                    if new_elem in this.info[i]:
+                        found = True
+                if not found: 
+                    this.info[i].append(new_elem)
+
+
+
 
 
     def postVisit_class_declaration(self, t):
@@ -56,7 +93,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_statement_assignment(self, t):
         lhs = None
         # FIXME - This is really specific make it more general
-        if t.lhs.__class__.__name__ == "attribute":
+        if t.lhs.__class__.__name__ == "expression_attribute":
             lhs = self._current_scope.parent.lookup_this_scope(t.lhs.attr)
             t.lhs.class_name = lhs.info[-1] # maybe useless
         else: 
@@ -98,6 +135,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 "Type Checking",
                 f"Function name '{t.identifier}' cannot be an identifier.",
                 t.lineno)
+        t.type = value.type
 
     def preVisit_expression_call(self, t):
         self.number_of_actual_parameters.append(0)
@@ -168,13 +206,36 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             
 
 
+
     def postVisit_expression_attribute(self, t):
-        t.type = self._get_type(t)
-            
+        self._exist_membership(t, "attribute")
+
     def postVisit_expression_method(self, t):
-        t.type = self._get_type(t)
+        self._exist_membership(t, "method")
 
-
+    # Checks if instance trying to be accessed exits and has field as member
+    def _exist_membership(self, t, cat):
+        inst = self._current_scope.lookup(t.inst)
+        if not inst:
+            error_message("Type Checking", 
+                          f"Instance {t.inst} not found.",
+                          t.lineno)
+        field = None
+        if t.inst == "this": # Looking only through class attributes
+            field = self._current_scope.parent.lookup_this_scope(t.field)
+        else: # Finding class the attribute should be part of and checking for membership
+            desc = self._current_scope.lookup(inst.type[:-1])
+            idx = 0 if cat == "attribute" else 1 # if not attribute then method
+            print(desc.info[idx])
+            for elem in desc.info[idx]:
+                if elem[0] == t.field:
+                    field = elem[0]
+                    t.type = elem[1]
+                    break # stops searching when first match found
+        if not field:
+            error_message("Symbol Collection",
+                          f"Identifier '{t.field}' not found.",
+                          t.lineno)
 
 
 
@@ -212,22 +273,22 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"Type of function and return statement does not match.",
                           t.lineno)
     
-
-    def _get_type_of_class(self, t, cat):
-        idx = None
-        if cat == "attribute":
-            idx = 0
-        elif cat == "method":
-            idx = 1
-        if idx == None:
-            print("Type Checking\n" + 
-                  "Category given to find type of class resulted in None index")
-            return # FIXME This might be very illegal IDK ask Steffen
-        val = self._current_scope.lookup(t.inst).type[:-1]
-        cd = self._current_scope.lookup(val).info[idx]
-        for elem in cd:
-            if t.field == elem[0]:
-                return elem[1]
+    # If expression_attribute and expression_method are deleted from _get_type delete this code as well
+    #def _get_type_of_class(self, t, cat):
+    #    idx = None
+    #    if cat == "attribute":
+    #        idx = 0
+    #    elif cat == "method":
+    #        idx = 1
+    #    if idx == None:
+    #        error_message("Type Checking",
+    #                      f"Category '{cat}' given to find type of class resulted in None index.",
+    #                      t.lineno)
+    #    val = self._current_scope.lookup(t.inst).type[:-1]
+    #    cd = self._current_scope.lookup(val).info[idx]
+    #    for elem in cd:
+    #        if t.field == elem[0]:
+    #            return elem[1]
 
 
 
@@ -235,10 +296,15 @@ class ASTTypeCheckingVisitor(VisitorsBase):
           match t.__class__.__name__:
             case "expression_new_instance":
                 return t.struct + "*"
-            case "expression_attribute":
-                return self._get_type_of_class(t, "attribute")
-            case "expression_method":
-                return self._get_type_of_class(t, "method")
+              
+
+            # Might not be needed due to new implementation of their respective postVisits
+            #case "expression_attribute":
+            #    return self._get_type_of_class(t, "attribute")
+            #case "expression_method":
+            #    return self._get_type_of_class(t, "method")
+
+
             case "expression_binop":
                 return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
             case "expression_call":

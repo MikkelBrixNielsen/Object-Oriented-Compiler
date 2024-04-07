@@ -75,7 +75,7 @@ class ASTSymbolVisitor(VisitorsBase):
         func = t.main_function
         if func.name != "main":
             error_message("Symbol Collection", 
-                          f"missing function {'main'} - please define.",
+                          f"missing function {'main'} - please define as first function.",
                           t.lineno)
         elif func.type != "int":
             error_message("Symbol Collection",
@@ -162,30 +162,30 @@ class ASTSymbolVisitor(VisitorsBase):
                                [self.variable_offset] + [x for x in args]))
         self.variable_offset += 1
 
-    def postVisit_expression_identifier(self, t):
-        value = self._current_scope.lookup(t.identifier) 
-        if not value:
-            error_message("Symbol Collection",
-                          f"Identifier '{t.identifier}' not found.",
-                          t.lineno)
-        t.type = value.type
-
-    def postVisit_attribute(self, t):
-        value = self._current_scope.lookup(t.attr)
-        if not value:
-            error_message("Symbol Collection",
-                          f"Identifier '{t.attr}' not found.",
-                          t.lineno)
-        
-
-    # make class declaration the descriptor and give class 
-    # declaration in lexer a class body instead of descriptor???
+    # FIXME make class declaration the descriptor and give class 
+    # FIXME declaration in lexer a class body instead of descriptor???
     def preVisit_class_declaration(self, t):
-        info = [[],[],[t.extends]]
-        if self._current_scope.lookup_this_scope(t.name):
+        if self._current_scope.lookup(t.name):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
+        
+        # Eliminate recursive extensions by only allowing a 
+        # class to extend an already defined class
+        extensions = []
+        if t.extends:
+            extensions.append(t.extends)
+            super = self._current_scope.lookup(t.extends)
+            if not super:
+                error_message("Symbol Collection",
+                              f"Class '{t.extends}' not found - maybe used before declaration.",
+                              t.lineno)
+            if not super.cat == NameCategory.CLASS:
+                error_message("Symbol Collection",
+                              f"Extension '{t.extends}' is not a class.",
+                              t.lineno)
+            
+        info = [[],[], extensions]
         self._current_scope.insert(
             t.name, SymVal(NameCategory.CLASS,
                            None,
@@ -251,12 +251,14 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.params:
             t.params.struct = t.identifier
 
+    # FIXME - Assigning type to parameters might need more complex logic to correctly identify the differet type of parameters there exit and giving them the correct type
     def preVisit_instance_expression_list(self, t):
         # Assigns the struct each expression relates to
         if t.next:
             t.next.struct = t.struct
         # Assigns types to the parameters
-        t.exp.type = self._current_scope.lookup(t.exp.identifier).type
+        if hasattr(t.exp, 'identifier'):
+            t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
     # Make function part of the structs in C code 
     # Make this.<attr> syntax to differentiat between global variable, parameters, and class attributes

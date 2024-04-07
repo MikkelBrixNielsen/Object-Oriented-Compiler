@@ -238,16 +238,6 @@ class method:
 
 
 
-
-@dataclass
-class attribute:
-    attr: Any
-    lineno: int
-
-    def accept(self, visitor):
-        visitor.postVisit(self)
-        
-
     
 
 

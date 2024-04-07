@@ -364,18 +364,25 @@ def p_statement_print(t):
     t[0] = AST.statement_print(t[3], t.lexer.lineno)
 
 
+
+
+
+
+
 def p_statement_assignment(t):
     'statement_assignment : lhs ASSIGN expression SEMICOL'
     t[0] = AST.statement_assignment(t[1], t[3], t.lexer.lineno)
 
-def p_lhs(t): # make this more uniform so that the other phases have a similar interface to interact with attributes, identifers and whatever else might come
+def p_lhs(t):
     '''lhs : IDENT
            | THIS DOT IDENT'''
         #  | FIXME IDENT DOT IDENT # Instance acces assignemnt 
     if len(t) == 2:
         t[0] = t[1]
     else: 
-        t[0] = AST.attribute(t[3], t.lexer.lineno)
+        t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
+
+
 
 
 
@@ -395,11 +402,14 @@ def p_statement_compound(t):
     t[0] = t[2]
 
 
+
+
+
+
 def p_optional_statement_list(t):
     '''optional_statement_list : empty
                                | statement_list'''
     t[0] = t[1]
-
 
 def p_statement_list(t):
     '''statement_list : statement
@@ -409,7 +419,7 @@ def p_statement_list(t):
     else:
         t[0] = AST.statement_list(t[1], t[2], t.lexer.lineno)
 
-# FIXME NOT IMPLEMENTE groupe / string or expression_attribute 
+# FIXME NOT IMPLEMENTE groupe / string 
 def p_expression(t):
     '''expression : expression_integer
                   | expression_float
@@ -434,7 +444,6 @@ def p_optional_instance_expression_list(t):
                                          | instance_expression_list'''
     t[0] = t[1]
 
-
 def p_instance_expression_list(t):
     '''instance_expression_list : expression
                                 | expression COMMA instance_expression_list'''
@@ -442,10 +451,6 @@ def p_instance_expression_list(t):
         t[0] = AST.instance_expression_list(t[1], None, t.lexer.lineno)
     else:
         t[0] = AST.instance_expression_list(t[1], t[3], t.lexer.lineno)
-
-
-
-
 
 def p_expression_integer(t):
     'expression_integer : INT'
@@ -487,14 +492,26 @@ def p_expression_call(t):
 
 
 
+# For recognizing "this." syntax
+def p_expression_this_attribute(t):
+    'expression_this_attribute : THIS DOT IDENT'
+    t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
-
-
-
-# For accessing an attribute on a class 
+# For accessing an attribute or method on a class 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
+
+
+
+
+
+
+
+
+
+
+
 
 
 def p_expression_method(t):
@@ -506,16 +523,6 @@ def p_expression_method(t):
 
 
 
-
-
-
-
-
-
-# For recognizing "this." syntax
-def p_expression_this_attribute(t):
-    'expression_this_attribute : THIS DOT IDENT'
-    t[0] = AST.attribute(t[3], t.lexer.lineno)
 
 
 def p_expression_binop(t):
