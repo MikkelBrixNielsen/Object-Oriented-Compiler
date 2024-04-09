@@ -15,17 +15,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         if not t.name == "global": 
            self._function_type_match_return_type(t)
 
-
-
-
-
-
-
-
-
-
-
-    # FIXME What should happen if a class tires to extend itself (just don't allow?)
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
         # checks if the extensions is actually a class 
@@ -47,40 +36,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 error_message("Type Checking",
                             f"{t.name} can only extend other classes {super} is a {cat}.",
                             t.lineno)
-            self._extend(t, super_cd)
-
-    # FIXME If multi-inheritance is implemented make this support that
-    def _extend(self, t, ext):
-        this = self._current_scope.lookup(t.name)
-
-        # Don't know if this is needed but it's here anyway but 
-        # yeah idk maybe ask Steffen?????
-        if not this:
-            error_message("Type Checking",
-                        f"class '{t.name}' not found.",
-                        t.lineno)
-        #######################################################
-        
-        # FIXME - Correct to only add things from the extension that have not been overwritten
-        # Could be optimized to only look at the elements in the original info and not the updating one
-        for i in range(len(ext.info)):
-            for new_elem in ext.info[i]:
-                found = False
-                if i < 2: # Tuple comparison for attributes and methods
-                    for elem in this.info[i]:
-                        if new_elem[0] == elem[0]:
-                            found = True
-                            break # new_elem was found, so stop looking for it
-                else: # String comparision for extensions
-                    if new_elem in this.info[i]:
-                        found = True
-                if not found: 
-                    this.info[i].append(new_elem)
-
-
-
-
-
+    
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
 
@@ -167,15 +123,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     def postVisit_expression_binop(self, t):
         t.type = self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
-
-
-
-
-
-
-
-
-    
                 
     def postVisit_expression_new_instance(self, t):
         value = self._current_scope.lookup(t.struct)
@@ -203,47 +150,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         
         # if everything checks out maybe do something cool???
-            
-
-
 
     def postVisit_expression_attribute(self, t):
         self._exist_membership(t, "attribute")
 
     def postVisit_expression_method(self, t):
         self._exist_membership(t, "method")
-
-    # Checks if instance trying to be accessed exits and has field as member
-    def _exist_membership(self, t, cat):
-        inst = self._current_scope.lookup(t.inst)
-        if not inst:
-            error_message("Type Checking", 
-                          f"Instance {t.inst} not found.",
-                          t.lineno)
-        field = None
-        if t.inst == "this": # Looking only through class attributes
-            field = self._current_scope.parent.lookup_this_scope(t.field)
-        else: # Finding class the attribute should be part of and checking for membership
-            desc = self._current_scope.lookup(inst.type[:-1])
-            idx = 0 if cat == "attribute" else 1 # if not attribute then method
-            print(desc.info[idx])
-            for elem in desc.info[idx]:
-                if elem[0] == t.field:
-                    field = elem[0]
-                    t.type = elem[1]
-                    break # stops searching when first match found
-        if not field:
-            error_message("Symbol Collection",
-                          f"Identifier '{t.field}' not found.",
-                          t.lineno)
-
-
-
-
-
-
-
-
 
     # The auxiliaries
     def _getLen(self, params):
@@ -342,23 +254,26 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 else: 
                     return "float"
                 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- # FIXME     Something seems off with line numbers 
-            # line number for some reason points 
-            # to the next line of code after the 
-            # line where the error actually occurred
+    # Checks if instance trying to be accessed exits and has field as member
+    def _exist_membership(self, t, cat):
+        inst = self._current_scope.lookup(t.inst)
+        if not inst:
+            error_message("Type Checking", 
+                          f"Instance {t.inst} not found.",
+                          t.lineno)
+        field = None
+        if t.inst == "this": # Looking only through class attributes / methods
+            field = self._current_scope.parent.lookup_this_scope(t.field)
+        else: # Finding class the attribute / method should be part of and checking for membership
+            desc = self._current_scope.lookup(inst.type[:-1])
+            idx = 0 if cat == "attribute" else 1 # if not attribute then method
+            print(desc.info[idx])
+            for elem in desc.info[idx]:
+                if elem[0] == t.field:
+                    field = elem[0]
+                    t.type = elem[1]
+                    break # stops searching when first match found
+        if not field:
+            error_message("Symbol Collection",
+                          f"Identifier '{t.field}' not found.",
+                          t.lineno)

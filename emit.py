@@ -147,18 +147,16 @@ class Emit:
                         s += ","
                     self._raw2(" " + s)
 
+
+
+
+
+
                 case Op.INSTANCE:
                     struct = instr.args[0]
                     self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
-
                 case Op.ATTRASSIGN:
                     self._add(f"{instr.args[0]}->{instr.args[2]} = ")
-
-
-
-
-
-
                 case Op.THIS:
                     self._raw("this->")
                     pass
@@ -179,6 +177,10 @@ class Emit:
                     self._raw(str(instr.args[0]))
                 case Op.RET:
                     self._add("return ")
+                case Op.IDT_M:
+                    self.indent_level -= 1
+                case Op.IDT_P:
+                    self.indent_level += 1
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 

@@ -147,21 +147,6 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.type = t.type
         self._record_variables(t, NameCategory.VARIABLE)
 
-    def _record_variables(self, t, *args): # maybe don't need to be *args
-        # AUX: Recording local variable names in the symbol table:
-        if self._current_scope.lookup_this_scope(t.variable):
-            error_message(
-                "Symbol Collection",
-                f"Redeclaration of '{t.variable}' in the same scope.",
-                t.lineno)
- 
-        self._current_scope.insert(
-            t.variable, SymVal(args[0],
-                               t.type,
-                               self._current_level,
-                               [self.variable_offset] + [x for x in args]))
-        self.variable_offset += 1
-
     # FIXME make class declaration the descriptor and give class 
     # FIXME declaration in lexer a class body instead of descriptor???
     def preVisit_class_declaration(self, t):
@@ -170,20 +155,11 @@ class ASTSymbolVisitor(VisitorsBase):
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
         
-        # Eliminate recursive extensions by only allowing a 
-        # class to extend an already defined class
+        # FIXME - Eliminate recursive extensions by only allowing a 
+        # FIXME - class to extend an already defined class
         extensions = []
         if t.extends:
             extensions.append(t.extends)
-            super = self._current_scope.lookup(t.extends)
-            if not super:
-                error_message("Symbol Collection",
-                              f"Class '{t.extends}' not found - maybe used before declaration.",
-                              t.lineno)
-            if not super.cat == NameCategory.CLASS:
-                error_message("Symbol Collection",
-                              f"Extension '{t.extends}' is not a class.",
-                              t.lineno)
             
         info = [[],[], extensions]
         self._current_scope.insert(
@@ -198,13 +174,22 @@ class ASTSymbolVisitor(VisitorsBase):
         # Saving the current symbol table in the AST for future use:
         t.symbol_table = self._current_scope
         t.scope_level = self._current_level
-        # Preparing for the processing of formal parameters:
-        self.parameter_offset = 0
 
     def postVisit_class_declaration(self, t):
+        if t.extends:
+            super = self._current_scope.lookup(t.extends)
+            if not super:
+                error_message("Symbol Collection",
+                              f"Class '{t.extends}' not found - maybe used before declaration.",
+                              t.lineno)
+            if not super.cat == NameCategory.CLASS:
+                error_message("Symbol Collection",
+                              f"Extension '{t.extends}' is not a class.",
+                              t.lineno)
+            self._extend(t, super)
         self._current_scope = self._current_scope.parent
         self._current_level -= 1
-    
+
     def preVisit_class_descriptor(self, t):
         if t.attributes:
             t.attributes.name = t.name
@@ -235,7 +220,8 @@ class ASTSymbolVisitor(VisitorsBase):
         t.par_list.type = t.parent + "*" # sets the reference to the class it belongs to
         self.preVisit_function(t)
         value = self._current_scope.lookup(t.parent)
-        value.info[1].append((t.name, t.type, t.par_list))
+        value.info[1].append((t.name, t.type, t))
+
 
     def midVisit_method(self, t):
         self.midVisit_function(t)
@@ -260,7 +246,60 @@ class ASTSymbolVisitor(VisitorsBase):
         if hasattr(t.exp, 'identifier'):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
-    # Make function part of the structs in C code 
     # Make this.<attr> syntax to differentiat between global variable, parameters, and class attributes
     # Make new syntax work to create class instances 
     # make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
+
+
+
+# Auxiliaries
+    def _record_variables(self, t, *args): # maybe don't need to be *args
+        # AUX: Recording local variable names in the symbol table:
+        if self._current_scope.lookup_this_scope(t.variable):
+            error_message(
+                "Symbol Collection",
+                f"Redeclaration of '{t.variable}' in the same scope.",
+                t.lineno)
+ 
+        self._current_scope.insert(
+            t.variable, SymVal(args[0],
+                               t.type,
+                               self._current_level,
+                               [self.variable_offset] + [x for x in args]))
+        self.variable_offset += 1
+
+
+
+
+
+    # FIXME If multi-inheritance is implemented make this support that
+    def _extend(self, t, ext):
+        this = self._current_scope.lookup(t.name)
+        # Don't know if this is needed but it's here anyway but 
+        # yeah idk maybe ask Steffen?????
+        if not this:
+            error_message("Symbol Collection",
+                        f"class '{t.name}' not found.",
+                        t.lineno)
+        #######################################################
+        
+
+        # FIXME - Correct to only add things from the extension that have not been overwritten
+        # Could be optimized to only look at the elements in the original info and not the updating one
+        new_additions = []
+        for i in range(len(ext.info)):
+            for new_elem in ext.info[i]:
+                found = False
+                if i < 2: # Tuple comparison for attributes and methods
+                    for elem in this.info[i]:
+                        if new_elem[0] == elem[0]:
+                            found = True
+                            break # new_elem was found, so stop looking for it
+                else: # String comparision for extensions
+                    if new_elem in this.info[i]:
+                        found = True
+                if not found: 
+                    this.info[i].append(new_elem)
+                    if i < 2: # Only adds attributes and methods to the list new_additions
+                        new_additions.append(new_elem)
+        this.info.append(new_additions) 

@@ -65,7 +65,7 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
             # Print AST tree in dot format:
             pp = ASTTreePrinterVisitor()
 
-        the_program = the_program.body  # Remove artificial outer main.
+        the_program = the_program.body  # Remove artificial outer global.
         the_program.accept(pp)
         return pp.getPrettyProgram()
 
