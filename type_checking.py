@@ -50,26 +50,26 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         lhs = None
         # FIXME - This is really specific make it more general
         if t.lhs.__class__.__name__ == "expression_attribute":
-            lhs = self._current_scope.parent.lookup_this_scope(t.lhs.attr)
-            t.lhs.class_name = lhs.info[-1] # maybe useless
+            lhs = self._exist_membership(t.lhs, "attribute")         
         else: 
             lhs = self._current_scope.lookup(t.lhs)
-
-        t_rhs = self._get_type(t.rhs)
+            lhs = (t.lhs, lhs.type, lhs.cat)
         if not lhs:
             error_message("Type Checking",
-                          f"Variable '{t.lhs}' not found.",
+                          f"Variable '{lhs[0]}' not found.",
                           t.lineno)
-        if lhs.cat == NameCategory.PARAMETER:
+        if lhs[2] == NameCategory.PARAMETER:
             error_message("Type Checking",
-                          f"Assignment to parameter '{t.lhs}' not allowed.",
+                          f"Assignment to parameter '{lhs[0]}' not allowed.",
                           t.lineno)
-        elif lhs.cat == NameCategory.FUNCTION:
+        elif lhs[2] == NameCategory.FUNCTION:
             error_message("Type Checking",
-                          f"Assignment to function '{t.lhs}' not allowed.",
+                          f"Assignment to function '{lhs[0]}' not allowed.",
                           t.lineno)
         # check whether what is being assigned has the same type as what is being assigned to
-        t_lhs = lhs.type
+        t_lhs = lhs[1]
+        t_rhs = self._get_type(t.rhs)
+        
         if not t_lhs == t_rhs:
             # FIXME - I REALLY DON'T LIKE THAT A FUCNTIONS RETURN TYPE IS CHECKED HERE BUT MAYBE 
             # THAT IS OKAY IDK THIS SEEMS REALLY BAD SINCE IT IS THEN CHECKED AGIAN WHEN THE 
@@ -154,8 +154,13 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_attribute(self, t):
         self._exist_membership(t, "attribute")
 
-    def postVisit_expression_method(self, t):
+    def preVisit_expression_method(self, t):
+        self.number_of_actual_parameters.append(0)
         self._exist_membership(t, "method")
+
+    def postVisit_expression_method(self, t):
+        self.number_of_actual_parameters.pop()
+
 
     # The auxiliaries
     def _getLen(self, params):
@@ -208,15 +213,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
           match t.__class__.__name__:
             case "expression_new_instance":
                 return t.struct + "*"
-              
-
-            # Might not be needed due to new implementation of their respective postVisits
-            #case "expression_attribute":
-            #    return self._get_type_of_class(t, "attribute")
-            #case "expression_method":
-            #    return self._get_type_of_class(t, "method")
-
-
+            case "expression_attribute":
+                return t.type
+            case "expression_method":
+                return t.type
             case "expression_binop":
                 return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
             case "expression_call":
@@ -264,16 +264,23 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         field = None
         if t.inst == "this": # Looking only through class attributes / methods
             field = self._current_scope.parent.lookup_this_scope(t.field)
+            # FIXME - Should there be lookup into extensions when referencing "this"' attributes???? IDK ASK STEFFEN
+
         else: # Finding class the attribute / method should be part of and checking for membership
             desc = self._current_scope.lookup(inst.type[:-1])
             idx = 0 if cat == "attribute" else 1 # if not attribute then method
-            print(desc.info[idx])
-            for elem in desc.info[idx]:
-                if elem[0] == t.field:
-                    field = elem[0]
-                    t.type = elem[1]
-                    break # stops searching when first match found
+            name = t.field if cat == "attribute" else t.name
+            while field == None:
+                for elem in desc.info[idx]:
+                    if elem[0] == name:
+                        field = (elem[0], elem[1], NameCategory.ATTRIBUTE)
+                        t.type = elem[1]
+                        break # stops searching when first match found
+                if field or len(desc.info[2]) == 0:
+                    break # if member found stop looking or no more extension to look through 
+                desc = self._current_scope.lookup(desc.info[2][0])
         if not field:
-            error_message("Symbol Collection",
+            error_message("Type Checking",
                           f"Identifier '{t.field}' not found.",
                           t.lineno)
+        return field

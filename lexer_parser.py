@@ -375,8 +375,8 @@ def p_statement_assignment(t):
 
 def p_lhs(t):
     '''lhs : IDENT
-           | THIS DOT IDENT'''
-        #  | FIXME IDENT DOT IDENT # Instance acces assignemnt 
+           | THIS DOT IDENT
+           | IDENT DOT IDENT''' 
     if len(t) == 2:
         t[0] = t[1]
     else: 

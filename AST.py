@@ -235,17 +235,6 @@ class method:
         visitor.postVisit(self)
 
 
-
-
-
-    
-
-
-
-
-
-
-
 @dataclass
 class expression_attribute:
     inst: Any
@@ -260,12 +249,14 @@ class expression_attribute:
 class expression_method:
     inst: Any
     name: Any
-    params: Any
+    exp_list: Any
     lineno: Any
     type: Any = field(default=None)
 
-
     def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.exp_list:
+            self.exp_list.accept(visitor)
         visitor.postVisit(self)
 
 

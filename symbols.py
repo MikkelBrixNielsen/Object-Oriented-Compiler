@@ -161,7 +161,8 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.extends:
             extensions.append(t.extends)
             
-        info = [[],[], extensions]
+        # [attributes, methods, extended, methods inherited from extended class]
+        info = [[],[], extensions, []]
         self._current_scope.insert(
             t.name, SymVal(NameCategory.CLASS,
                            None,
@@ -234,6 +235,7 @@ class ASTSymbolVisitor(VisitorsBase):
             t.rhs.identifier = t.lhs
 
     def preVisit_expression_new_instance(self, t):
+        t.symbol_table = self._current_scope # adds sym_table to instances
         if t.params:
             t.params.struct = t.identifier
 
@@ -246,7 +248,7 @@ class ASTSymbolVisitor(VisitorsBase):
         if hasattr(t.exp, 'identifier'):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
-    # Make this.<attr> syntax to differentiat between global variable, parameters, and class attributes
+    # Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
     # Make new syntax work to create class instances 
     # make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
 
@@ -268,24 +270,14 @@ class ASTSymbolVisitor(VisitorsBase):
                                [self.variable_offset] + [x for x in args]))
         self.variable_offset += 1
 
-
-
-
-
-    # FIXME If multi-inheritance is implemented make this support that
+    # Extends class with appropriate methods and attributes 
+    # Maybe works as should maybe not IDK ask Steffen
     def _extend(self, t, ext):
         this = self._current_scope.lookup(t.name)
-        # Don't know if this is needed but it's here anyway but 
-        # yeah idk maybe ask Steffen?????
         if not this:
             error_message("Symbol Collection",
                         f"class '{t.name}' not found.",
                         t.lineno)
-        #######################################################
-        
-
-        # FIXME - Correct to only add things from the extension that have not been overwritten
-        # Could be optimized to only look at the elements in the original info and not the updating one
         new_additions = []
         for i in range(len(ext.info)):
             for new_elem in ext.info[i]:
@@ -298,8 +290,6 @@ class ASTSymbolVisitor(VisitorsBase):
                 else: # String comparision for extensions
                     if new_elem in this.info[i]:
                         found = True
-                if not found: 
-                    this.info[i].append(new_elem)
-                    if i < 2: # Only adds attributes and methods to the list new_additions
+                if not found and i < 2: # Only adds attributes and methods to the list new_additions
                         new_additions.append(new_elem)
-        this.info.append(new_additions) 
+        this.info[3] += new_additions

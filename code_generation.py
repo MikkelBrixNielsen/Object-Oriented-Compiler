@@ -140,41 +140,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._extend_class(t)
         self._app(Ins(Op.CLASSMID, t.name))
 
-
-    # FIXME Make it so code is generated for the extensions 
-    # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
-    
-    
-    
-    # FIXME - Variables inherited should become a special version associated with a "virtual" instance of the extension e.g. Second has attr a, so in Third there will be a Second_a attr and for Seconds get_a Third will return Second_a
-    # or it might be possible to include na actual instance of Second in third and just use the methods already defined for second which are in the global scope already
-    def _extend_class(self, t):
-        cd = self._current_scope.lookup(t.name)
-        if len(cd.info[2]) > 0: # len > 0 => there are extensions
-            if len(cd.info) > 3: # if greater than 3 there are additons to generate code for
-                for member in cd.info[-1]: # lets idx of info is where extensions' additions are located if there are any
-                    if len(member) < 3: # Attribute
-                        self._app(Ins(Op.TYPE2, member[1]))
-                        self._app(Ins(Op.VARLIST2, member[0], None))
-                        self._app(Ins(Op.EOL2))
-                    else: # method
-                        self._app(Ins(Op.IDT_M)) 
-                        member[2].name = member[0] # Change name of method to neutral variant
-                        member[2].parent = t.name # Change parent to correct parent
-                        ic_gen = ASTCodeGenerationVisitor() # Create visitor
-                        member[2].accept(ic_gen) # use visitor to create intermediate code for the method
-                        ic = ic_gen.get_code() # get the instructions
-                        [self._app(ins) for ins in ic] # append the instrutions for the method to the actual code
-                        self._app(Ins(Op.IDT_P))
-
-
-    
-
-
-
-
-
-
     def preVisit_method(self, t):
         t.name = t.parent + "_" + t.name
         self.preVisit_function(t)
@@ -193,10 +158,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_attributes_list(self, t):
         self._app(Ins(Op.VARLIST2, t.variable, t.next))
-
-
-
-
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier))
@@ -251,7 +212,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 self._app(Ins(Op.GTE))
 
     def preVisit_expression_new_instance(self, t):
+        self._current_scope = t.symbol_table
         self._app(Ins(Op.INSTANCE, t.struct))
+        self._extension_instance(t)
+
 
     def preVisit_instance_expression_list(self, t):
         self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
@@ -271,4 +235,99 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, t.inst + "->" + t.field))
 
 
+
+
+    def preVisit_expression_method(self, t):
+        self._app(Ins(Op.RAW, self._current_scope.lookup(t.inst).type[:-1] + "_"))
+        self.preVisit_expression_call(t)
+        self._app(Ins(Op.RAW, t.inst + ", "))
+
+
+    def postVisit_expression_method(self, t):
+        self.postVisit_expression_call(t)
         
+
+
+
+
+
+
+
+# auxies
+    # FIXME - RUNNING NUMBER
+    def _extension_instance(self, t):
+        cd = self._current_scope.lookup(t.struct)
+        if len(cd.info[2]) > 0: # len > 0 => there are extensions 
+            temp = cd.info[2][0].lower()
+            self._app(Ins(Op.TYPE, cd.info[2][0] + "*"))
+            self._app(Ins(Op.VARLIST, temp, None))
+            self._app(Ins(Op.RAW, " = "))            
+            self._app(Ins(Op.INSTANCE, cd.info[2][0]))
+               
+        # Instanciate all attributeds for the new instance 
+            super = self._current_scope.lookup(cd.info[2][0])
+            # FIXME - MAYBE WORKS IDK ASK STEFFEN
+            # FIXME - NEEDS running number 
+            if t.params:
+                current_param = t.params
+                for attr in super.info[0]:
+                    self._app(Ins(Op.INDENT))
+                    self._app(Ins(Op.ASSIGN, temp + "->" + attr[0]))
+                    # FIXME - DON'T LIKETHIS 
+                    if current_param:
+                        match current_param.exp.type:
+                            case "int":
+                                self._app(Ins(Op.RAW, current_param.exp.integer))
+                            case "float":
+                                self._app(Ins(Op.RAW, current_param.exp.double))
+                            case "char":
+                                self._app(Ins(Op.RAW, current_param.exp.char))
+                            case _:
+                                print(f"{current_param.exp.type} not implemented in _extension_instance in code generation - please fix")
+                    else:
+                        match attr[1]: # attr's type 
+                            case "int":
+                                self._app(Ins(Op.RAW, "0"))
+                            case "float":
+                                self._app(Ins(Op.RAW, "0.0"))
+                            case "char":
+                                self._app(Ins(Op.RAW, ""))
+                            case _:
+                                print(f"{current_param.exp.type} not implemented in _extension_instance in code generation - please fix")
+                    self._app(Ins(Op.EOL))
+                    current_param = current_param.next
+
+        # Assigns created struct to its parent class
+            self._app(Ins(Op.INDENT))
+            self._app(Ins(Op.RAW, t.identifier + "->" + temp + " = " + temp))
+            self._app(Ins(Op.EOL))
+
+    
+
+    # FIXME Make it so code is generated for the extensions 
+    # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
+    # FIXME - Variables inherited should become a special version associated with a "virtual" instance of the extension e.g. Second has attr a, so in Third there will be a Second_a attr and for Seconds get_a Third will return Second_a
+    # or it might be possible to include na actual instance of Second in third and just use the methods already defined for second which are in the global scope already
+    def _extend_class(self, t):
+        cd = self._current_scope.lookup(t.name)
+        if len(cd.info[2]) > 0: # len > 0 => extension exists
+                self._app(Ins(Op.TYPE2, cd.info[2][0] + "*"))
+                self._app(Ins(Op.VARLIST2, cd.info[2][0].lower(), None))
+                self._app(Ins(Op.EOL2)) 
+        if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
+            for member in cd.info[3]: # where the additions are located
+                if len(member) < 3: # Attribute
+                    self._app(Ins(Op.TYPE2, member[1]))
+                    self._app(Ins(Op.VARLIST2, member[0], None))
+                    self._app(Ins(Op.EOL2))
+                else: # method
+                    self._app(Ins(Op.IDT_M)) # remove indentation level 
+                    self._app(Ins(Op.TYPE, member[1]))
+                    self._app(Ins(Op.FUNCSTART, t.name + "_" + member[0]))
+                    self._app(Ins(Op.PARAMS, t.name + "*", "this", None))
+                    self._app(Ins(Op.FUNCMID))
+                    self._app(Ins(Op.RET))
+                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + member[0] + "(this->" + cd.info[2][0].lower() + ")"))
+                    self._app(Ins(Op.EOL))
+                    self._app(Ins(Op.FUNCEND))
+                    self._app(Ins(Op.IDT_P)) # add indentation level
