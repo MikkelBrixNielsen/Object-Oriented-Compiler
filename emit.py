@@ -163,7 +163,7 @@ class Emit:
                 case Op.SIGNATURE:
                     self._createFunctionSignature(instr)
                 case Op.PRINTSTART:
-                    self._add("printf(" + _print_type[instr.args[0]] + ", ")
+                    self._add("printf(\"" + _print_type[instr.args[0]] + "\\n\", ")
                 case Op.PRINTEND:
                     self._raw(");")
                 case Op.CALLSTART:

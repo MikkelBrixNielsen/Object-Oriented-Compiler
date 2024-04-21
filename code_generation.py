@@ -2,6 +2,7 @@ from enum import Enum, auto
 from singleton_decorator import singleton
 from visitors_base import VisitorsBase
 from symbols import NameCategory
+import AST
 
 
 class Op(Enum):
@@ -16,10 +17,6 @@ class Op(Enum):
     LTE = auto()
     GT = auto()
     GTE = auto()
-
-
-
-
     TYPE = auto()       # specifies that type for function and type infront of variable declaration lists should be printed
     EOL = auto()        # End of line (appends ";")
     RET = auto()
@@ -40,17 +37,11 @@ class Op(Enum):
     THIS = auto()
     INSTANCE = auto()
     ATTRASSIGN = auto()
-
     TYPE2 = auto()
     EOL2 = auto()  
     VARLIST2 = auto()
-
-
-
     PRINTSTART = auto()
     PRINTEND = auto()
-
-
     COMMA = auto()
     RAW = auto()        # direct print
 
@@ -94,6 +85,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         lhs = ""
         if isinstance(t.lhs , str): # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             lhs = t.lhs
+        # else the expression will do so automatically when visisted by the visitor
         self._app(Ins(Op.ASSIGN, lhs))
 
     def postVisit_statement_assignment(self, t):
@@ -232,18 +224,36 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         pass
     
     def postVisit_expression_attribute(self, t):
-        self._app(Ins(Op.RAW, t.inst + "->" + t.field))
+        cd = None
+        if t.inst == "this":
+            cd = self._current_scope.lookup(self._current_scope.lookup_this_scope(t.field).info[-1])
+        else:
+            cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
+        
+        if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
+            self._app(Ins(Op.RAW, t.inst + "->" + t.field))
+        else:
+            self._app(Ins(Op.RAW, t.inst + "->" + cd.info[2][0].lower() + "->" + t.field))
 
     def preVisit_expression_method(self, t):
-        self._app(Ins(Op.RAW, self._current_scope.lookup(t.inst).type[:-1] + "_"))
+        name = t.inst
+        if not name == "this":
+            name = self._current_scope.lookup(t.inst).type[:-1]
+        else:
+            name = self._current_scope.lookup(t.name).info.parent
+        self._app(Ins(Op.RAW, name + "_"))
         self.preVisit_expression_call(t)
-        self._app(Ins(Op.RAW, t.inst + ", "))
+        args = t.inst
+        if t.exp_list:
+            args += ", "
+        self._app(Ins(Op.RAW, args))
 
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
 
 # auxies
     # FIXME - RUNNING NUMBER
+    # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         cd = self._current_scope.lookup(t.struct)
         if len(cd.info[2]) > 0: # len > 0 => there are extensions 
@@ -263,7 +273,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.INDENT))
                     self._app(Ins(Op.ASSIGN, temp + "->" + attr[0]))
                     # FIXME - DON'T LIKETHIS 
-                    if current_param:
+                    if current_param and current_param.exp.type == attr[1]: # Latter part of this if should consider if the type of the expression being assigned to the attr matches its type but IDK ask Steffen
                         match current_param.exp.type:
                             case "int":
                                 self._app(Ins(Op.RAW, current_param.exp.integer))
@@ -280,7 +290,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                             case "float":
                                 self._app(Ins(Op.RAW, "0.0"))
                             case "char":
-                                self._app(Ins(Op.RAW, ""))
+                                self._app(Ins(Op.RAW, "''"))
                             case _:
                                 print(f"{current_param.exp.type} not implemented in _extension_instance in code generation - please fix")
                     self._app(Ins(Op.EOL))
@@ -290,8 +300,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.RAW, t.identifier + "->" + temp + " = " + temp))
             self._app(Ins(Op.EOL))
-
-    
 
     # FIXME Make it so code is generated for the extensions 
     # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
@@ -305,10 +313,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 self._app(Ins(Op.EOL2)) 
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
+                # FIXME - We probably should not add the attributes from the extended class to the actual class 
                 if len(member) < 3: # Attribute
-                    self._app(Ins(Op.TYPE2, member[1]))
-                    self._app(Ins(Op.VARLIST2, member[0], None))
-                    self._app(Ins(Op.EOL2))
+                    #self._app(Ins(Op.TYPE2, member[1]))
+                    #self._app(Ins(Op.VARLIST2, member[0], None))
+                    #self._app(Ins(Op.EOL2))
+                    pass
                 else: # method
                     self._app(Ins(Op.IDT_M)) # remove indentation level 
                     self._app(Ins(Op.TYPE, member[1]))
@@ -320,3 +330,11 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.EOL))
                     self._app(Ins(Op.FUNCEND))
                     self._app(Ins(Op.IDT_P)) # add indentation level
+                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0], AST.parameter_list(t.name + "*", "this", None, -1)))
+
+
+    def _is_member_in_tuple_list(self, m, tl):
+        for member in tl:
+            if member[0] == m[0] and member[1] == m[1]:
+                return True
+        return False

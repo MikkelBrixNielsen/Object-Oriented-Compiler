@@ -46,7 +46,7 @@ class body:
         if self.functions_decl:
             self.functions_decl.accept(visitor)
         visitor.postMidVisit(self)
-        # THIS MIGHT BE OKAY MAYBE NOT IF NOT OKAY DELETE THE IF AND MAKE STM_LIST REQUIRED AGAIN
+        # FIXME THIS MIGHT BE OKAY MAYBE NOT IF NOT OKAY DELETE THE IF AND MAKE STM_LIST REQUIRED AGAIN
         if self.stm_list:
             self.stm_list.accept(visitor)
         visitor.postVisit(self)

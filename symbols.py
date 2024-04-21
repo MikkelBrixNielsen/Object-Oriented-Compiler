@@ -113,8 +113,7 @@ class ASTSymbolVisitor(VisitorsBase):
         self.parameter_offset = 0
 
     def midVisit_function(self, t):
-        # Saving the number of formal parameters after the parameter
-        # processing is completed:
+        # Saving the number of formal parameters after the parameter processing is completed:
         t.number_of_parameters = self.parameter_offset
 
     def postVisit_function(self, t):
@@ -233,7 +232,7 @@ class ASTSymbolVisitor(VisitorsBase):
     def preVisit_statement_assignment(self, t):
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs
-
+    
     def preVisit_expression_new_instance(self, t):
         t.symbol_table = self._current_scope # adds sym_table to instances
         if t.params:
@@ -248,9 +247,10 @@ class ASTSymbolVisitor(VisitorsBase):
         if hasattr(t.exp, 'identifier'):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
-    # Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
-    # Make new syntax work to create class instances 
-    # make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
+
+    # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
+    # TODO - Make new syntax work to create class instances 
+    # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
 
 
 

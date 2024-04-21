@@ -431,8 +431,8 @@ def p_expression(t):
                   | expression_attribute
                   | expression_this_attribute
                   | expression_method
+                  | expression_this_method
                   | expression_new_instance'''
-                 #| expression_string
     t[0] = t[1]
 
 def p_expression_new_instance(t):
@@ -497,22 +497,15 @@ def p_expression_this_attribute(t):
     'expression_this_attribute : THIS DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
-# For accessing an attribute or method on a class 
+# For accessing an attribute on a class 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
 
-
-
-
-
-
-
-
-
-
-
+def p_expression_this_method(t):
+    'expression_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'
+    t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_expression_method(t):
     'expression_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'

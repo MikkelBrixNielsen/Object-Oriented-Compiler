@@ -45,6 +45,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         
     def postVisit_method(self, t):
         self._current_scope = self._current_scope.parent
+        self._function_type_match_return_type(t)
+
 
     def postVisit_statement_assignment(self, t):
         lhs = None
@@ -116,7 +118,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"'{t.name}' was called with too many parameters.",
                           t.lineno)
         self.number_of_actual_parameters.pop()
-        # FIXME - Check parameter types actually match was is needed compared to what was given :))
+        # FIXME - Check parameter types actually match what is needed compared to what was given :))
+        # This is implemented for class constructors so maybe that can be used here as well 
 
     def midVisit_expression_list(self, t):
         self.number_of_actual_parameters[-1] += 1
@@ -134,33 +137,30 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Identifier {t.struct} is not a class.",
                           t.lineno)
-        num_given_params = self._getLen(t.params)
-        num_actual_params = len(value.info[0])
-        if num_actual_params < num_given_params:
-            error_message("Type Checking",
-                          f"Constructor was called with too many argumnets.",
-                          t.lineno)
-        elif num_actual_params > num_given_params:
-            error_message("Type Checking",
-                          f"Constructor was called with too few arguments.",
-                          t.lineno)
-        elif not self._param_type_match(value.info[0], t.params):
-            error_message("Type Checking",
-                          f"Type of parameters given does not match parameters needed.",
-                          t.lineno)
-        
-        # if everything checks out maybe do something cool???
+        self._parameter_check("constructor for " + t.struct, t.params, value, t.lineno)
 
     def postVisit_expression_attribute(self, t):
         self._exist_membership(t, "attribute")
 
     def preVisit_expression_method(self, t):
         self.number_of_actual_parameters.append(0)
-        self._exist_membership(t, "method")
+        member = self._exist_membership(t, "method")
+        if not member:
+            error_message("Type Checking",
+                          f"Function '{t.name}' not found.",
+                          t.lineno)
+        elif member[2] != NameCategory.FUNCTION:
+            error_message("Type Checking",
+                          f"Identifier '{t.name}' is not a function.",
+                          t.lineno)
+        cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
+        meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[1])
+        if not meth:
+            meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[3])
+        self._exp_check(t.name, t.exp_list, meth, t.lineno)   
 
     def postVisit_expression_method(self, t):
         self.number_of_actual_parameters.pop()
-
 
     # The auxiliaries
     def _getLen(self, params):
@@ -186,37 +186,19 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         while current.next:
             current = current.next
         if not current.stm.exp.type == t.type:
+            print(current.stm.exp.type, t.type)
             error_message("Type Checking",
                           f"Type of function and return statement does not match.",
                           t.lineno)
-    
-    # If expression_attribute and expression_method are deleted from _get_type delete this code as well
-    #def _get_type_of_class(self, t, cat):
-    #    idx = None
-    #    if cat == "attribute":
-    #        idx = 0
-    #    elif cat == "method":
-    #        idx = 1
-    #    if idx == None:
-    #        error_message("Type Checking",
-    #                      f"Category '{cat}' given to find type of class resulted in None index.",
-    #                      t.lineno)
-    #    val = self._current_scope.lookup(t.inst).type[:-1]
-    #    cd = self._current_scope.lookup(val).info[idx]
-    #    for elem in cd:
-    #        if t.field == elem[0]:
-    #            return elem[1]
-
-
-
+            
     def _get_type(self, t):
           match t.__class__.__name__:
             case "expression_new_instance":
                 return t.struct + "*"
             case "expression_attribute":
-                return t.type
+                return t.type if t.type != None else self._exist_membership(t, "attribute")
             case "expression_method":
-                return t.type
+                return t.type if t.type != None else self._exist_membership(t, "method")
             case "expression_binop":
                 return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
             case "expression_call":
@@ -232,8 +214,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 return None
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
-
-
 
     # FIXME - figure out if it is needed to check which operation is performed
     def _get_effective_type(self, type1, type2, t):
@@ -263,9 +243,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         field = None
         if t.inst == "this": # Looking only through class attributes / methods
-            field = self._current_scope.parent.lookup_this_scope(t.field)
-            # FIXME - Should there be lookup into extensions when referencing "this"' attributes???? IDK ASK STEFFEN
-
+            elem = (t.field if cat == "attribute" else t.name, None, NameCategory.ATTRIBUTE if cat == "attribute" else NameCategory.FUNCTION)
+            field = self._current_scope.parent.lookup_this_scope(elem[0])
+            if field:
+                t.type = field.type
+                field = (elem[0], field.type, elem[2])
+            # DESIGN CHOICE this keyword can only be used for attributes defined in the specific class
         else: # Finding class the attribute / method should be part of and checking for membership
             desc = self._current_scope.lookup(inst.type[:-1])
             idx = 0 if cat == "attribute" else 1 # if not attribute then method
@@ -273,14 +256,60 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             while field == None:
                 for elem in desc.info[idx]:
                     if elem[0] == name:
-                        field = (elem[0], elem[1], NameCategory.ATTRIBUTE)
+                        field = (elem[0], elem[1], NameCategory.ATTRIBUTE if idx == 0 else NameCategory.FUNCTION)
                         t.type = elem[1]
                         break # stops searching when first match found
                 if field or len(desc.info[2]) == 0:
                     break # if member found stop looking or no more extension to look through 
                 desc = self._current_scope.lookup(desc.info[2][0])
+        
         if not field:
             error_message("Type Checking",
                           f"Identifier '{t.field}' not found.",
                           t.lineno)
         return field
+    
+    def _find_member_in_tuple_list(self, m, tl):
+        for member in tl:
+            if member[0] == m[0] and member[1] == m[1]:
+                return member[2]
+        return None
+
+    def _parameter_check(self, name, params, value, lineno):
+        num_given_params = self._getLen(params)
+        num_actual_params = len(value.info[0])
+        if num_actual_params < num_given_params:
+            error_message("Type Checking",
+                          f"call to {name} made with too many argumnets.",
+                          lineno)
+        elif num_actual_params > num_given_params:
+            error_message("Type Checking",
+                          f"call to {name} made with too few arguments.",
+                          lineno)
+        elif not self._param_type_match(value.info[0], params):
+            error_message("Type Checking",
+                          f"Type of parameters given does not match parameters needed.",
+                          lineno) 
+            
+    def _exp_check(self, name, exp_list, meth, lineno):
+        num_given_params = self._getLen(exp_list)
+        num_actual_params = self._getLen(meth.par_list) - 1 # minus 1 is to disregard the implicit reference to "this"
+        if num_actual_params < num_given_params:
+            error_message("Type Checking",
+                          f"call to {name} made with too many argumnets.",
+                          lineno)
+        elif num_actual_params > num_given_params:
+            error_message("Type Checking",
+                          f"call to {name} made with too few arguments.",
+                          lineno)
+        elif not self._exp_type_match(meth.par_list, exp_list):
+            error_message("Type Checking",
+                          f"Type of parameters given does not match parameters needed.",
+                          lineno) 
+
+    def _exp_type_match(self, a, b):
+        a = a.next # disregards the imlicit reference to "this"
+        while a and b and (a.type == b.exp.type):
+            a = a.next
+            b = b.next
+        return a == None and b == None
