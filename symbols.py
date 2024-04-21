@@ -209,7 +209,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
         value = self._current_scope.lookup(t.name)
         value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ATTRIBUTE, t.name) # FIXME maybe name is useless
+        self._record_variables(t, NameCategory.ATTRIBUTE, t.name)
 
     def preVisit_methods_declaration_list(self, t):
         t.decl.parent = t.parent

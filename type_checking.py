@@ -162,6 +162,53 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.number_of_actual_parameters.pop()
 
+    # probably no need to do any type checking on the part before the expressions
+    #def preVisit_statement_ifthenelse(self, t):
+    #    pass
+
+    # after expression has been evaluated check if it can be evaluated to boolean 
+    def preMidVisit_statement_ifthenelse(self, t):
+        immediate_conversion = ["int", "float", "char", "expression_integer", "expression_float", 
+                                "expression_bool", "expression_char"]
+        is_convertable = False
+        type = None
+        if t.exp.__class__.__name__ in immediate_conversion:
+            is_convertable = True
+        else:
+            match t.exp.__class__.__name__:
+                case "expression_identifier" | "expression_attribute" | "expression_this_attribute" | "expression_method" | "expression_this_method":
+                    is_convertable = t.exp.type in immediate_conversion
+                case "expression_call":
+                    value = self._current_scope.lookup(t.exp.name)
+                    if value:
+                        is_convertable = value.type
+                    else:
+                        is_convertable = False
+                case "expression_binop":
+                    type = self._get_effective_type(t.exp.lhs.type, t.exp.rhs.type, t.exp)
+                    is_convertable = type in immediate_conversion
+                case "expression_new_instance":
+                    # Design choice "new" instantiations should not evaluate to anything boolean
+                    is_convertable = False
+                case _:
+                    error_message("Type Checking",
+                            f"'{t.exp.__class__.__name__}' is not implemented for boolean conversion check in if statements.",
+                            t.lineno)
+        if not is_convertable:
+            error_message("Type Checking",
+                          f"'{type}' is not convertable to Bool.",
+                          t.lineno)
+
+    #probably no need to do any additional type checking on the then or else part of the statement
+    #def postMidVisit_statement_ifthenelse(self, t):
+    #    pass
+    #
+    #def postVisit_statement_ifthenelse(self, t):
+    #    pass
+
+
+
+
     # The auxiliaries
     def _getLen(self, params):
         num_params = 0
