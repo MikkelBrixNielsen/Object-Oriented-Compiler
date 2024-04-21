@@ -234,24 +234,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_attribute(self, t):
         self._app(Ins(Op.RAW, t.inst + "->" + t.field))
 
-
-
-
     def preVisit_expression_method(self, t):
         self._app(Ins(Op.RAW, self._current_scope.lookup(t.inst).type[:-1] + "_"))
         self.preVisit_expression_call(t)
         self._app(Ins(Op.RAW, t.inst + ", "))
 
-
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
-        
-
-
-
-
-
-
 
 # auxies
     # FIXME - RUNNING NUMBER
