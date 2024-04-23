@@ -71,12 +71,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         # check whether what is being assigned has the same type as what is being assigned to
         t_lhs = lhs[1]
         t_rhs = self._get_type(t.rhs)
-        
         if not t_lhs == t_rhs:
-            # FIXME - I REALLY DON'T LIKE THAT A FUCNTIONS RETURN TYPE IS CHECKED HERE BUT MAYBE 
-            # THAT IS OKAY IDK THIS SEEMS REALLY BAD SINCE IT IS THEN CHECKED AGIAN WHEN THE 
-            # FUCNTION IS ACTUALLY VISITED FOR TYPE CHECKING AND THAT JUST SEEMS A LITTLE "NEDEREN"
-            # BUT IDK MAYBE ASK STEFFEN HE MIGHT KNOW SOMETHING COOL
             self._function_type_match_return_type(self._current_scope.lookup(t.rhs.name).info)
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
@@ -96,6 +91,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t.type = value.type
 
     def preVisit_expression_call(self, t):
+        t.type = self._current_scope.lookup(t.name).info.type
         self.number_of_actual_parameters.append(0)
 
     def postVisit_expression_call(self, t):
@@ -162,12 +158,44 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.number_of_actual_parameters.pop()
 
-    # probably no need to do any type checking on the part before the expressions
-    #def preVisit_statement_ifthenelse(self, t):
-    #    pass
-
     # after expression has been evaluated check if it can be evaluated to boolean 
     def preMidVisit_statement_ifthenelse(self, t):
+        self._is_boolean_convertable(t)
+
+    def midVisit_statement_while(self, t):
+        self._is_boolean_convertable(t)
+
+    def preVisit_array_list(self, t):
+        if not str(t.type[:-2]) == t.exp.type:
+            error_message("Type Checking",
+                          f"Type mismatch assigning array of type {t.exp.type} to array of type {t.type}.",
+                          t.lineno)
+
+    def preVisit_expression_new_array(self, t):
+        self.number_of_actual_parameters.append(0)
+
+    def postVisit_expression_new_array(self, t):
+        mismatched = False
+        current = t.data
+        while current:
+            if not current.exp.type == t.type:
+                mismatched = True
+                break
+            current = current.next
+        
+        if mismatched:
+            error_message("Type Checking",
+                          f"{current.exp.type} does not match the type of the array being {t.type}.",
+                          t.lineno)
+        num_params = self.number_of_actual_parameters.pop()
+        if num_params > t.size:
+            error_message("Type Checking",
+                          f"Too many elements given to array, recieved {num_params} expected at most {t.size}.",
+                          t.lineno)
+        t.type = t.type + "[]"
+
+    # The auxiliaries
+    def _is_boolean_convertable(self, t):
         immediate_conversion = ["int", "float", "char", "expression_integer", "expression_float", 
                                 "expression_bool", "expression_char"]
         is_convertable = False
@@ -178,6 +206,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             match t.exp.__class__.__name__:
                 case "expression_identifier" | "expression_attribute" | "expression_this_attribute" | "expression_method" | "expression_this_method":
                     is_convertable = t.exp.type in immediate_conversion
+                    if not is_convertable:
+                        is_convertable = not t.exp.type == None
                 case "expression_call":
                     value = self._current_scope.lookup(t.exp.name)
                     if value:
@@ -198,18 +228,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"'{type}' is not convertable to Bool.",
                           t.lineno)
-
-    #probably no need to do any additional type checking on the then or else part of the statement
-    #def postMidVisit_statement_ifthenelse(self, t):
-    #    pass
-    #
-    #def postVisit_statement_ifthenelse(self, t):
-    #    pass
-
-
-
-
-    # The auxiliaries
+            
     def _getLen(self, params):
         num_params = 0
         current = params
@@ -233,7 +252,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         while current.next:
             current = current.next
         if not current.stm.exp.type == t.type:
-            print(current.stm.exp.type, t.type)
             error_message("Type Checking",
                           f"Type of function and return statement does not match.",
                           t.lineno)
@@ -252,13 +270,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 return self._current_scope.lookup(t.name).type
             case "attribute":
                 return self._current_scope.parent.lookup_this_scope(t.attr).type
-            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char":
+            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char" | "expression_new_array":
                 return t.type
             case "expression_identifier":
                 return self._current_scope.lookup(t.identifier).type
-            case "expression_group":
-                # FIXME - evaluate expression group somehow or remove it from program in its entirity
-                return None
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
 

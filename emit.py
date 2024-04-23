@@ -102,33 +102,6 @@ class Emit:
             self._simpleInstruction(instr)
         else:
             match instr.opcode:
-                case Op.TYPE:
-                    self._addType(instr, "1")
-                case Op.EOL:
-                    self._raw(";")
-                case Op.INDENT:
-                    self._add("")
-                case Op.VARLIST:
-                    s = instr.args[0]
-                    if instr.args[1]:
-                        s += ","
-                    self._raw(" " + s)
-                case Op.PARAMS:
-                    self._addParam(instr)
-                case Op.ASSIGN:
-                    self._raw(instr.args[0] + " = ")
-                case Op.FUNCSTART:
-                    self.indent_level += 1
-                    self._raw(" " + instr.args[0] + "(")
-                case Op.FUNCMID:
-                    self._raw(") {\n")
-                case Op.FUNCEND:
-                    self.indent_level -= 1
-                    self._add("}\n\n")
-                
-
-
-
                 # FIXME - THIS IS FUCKING SHIT ADD2!??!?!? raw2 ?!?!?! WHAT EVEN IS THIS GARBAGE!?!?!?!?!
                 case Op.CLASS:
                     self._createClassSignature(instr)
@@ -142,16 +115,13 @@ class Emit:
                 case Op.EOL2:
                     self._raw2(";")
                 case Op.VARLIST2:
-                    s = instr.args[0]
-                    if instr.args[1]:
-                        s += ","
-                    self._raw2(" " + s)
-
-
-
-
-
-
+                    self._create_varlist(instr, 2)
+                case Op.VARLIST:
+                    self._create_varlist(instr, 1)
+                case Op.PARAMS:
+                    self._addParam(instr)
+                case Op.ASSIGN:
+                    self._raw(instr.args[0] + " = ")
                 case Op.INSTANCE:
                     struct = instr.args[0]
                     self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
@@ -159,28 +129,43 @@ class Emit:
                     self._add(f"{instr.args[0]}->{instr.args[2]} = ")
                 case Op.THIS:
                     self._raw("this->")
-                    pass
+                case Op.TYPE:
+                    self._addType(instr, "1")
+                case Op.INDENT:
+                    self._add("")
                 case Op.SIGNATURE:
                     self._createFunctionSignature(instr)
-                case Op.PRINTSTART:
-                    self._add("printf(\"" + _print_type[instr.args[0]] + "\\n\", ")
-                case Op.PRINTEND:
-                    self._raw(");")
-                case Op.CALLSTART:
-                    self._raw(instr.args[0] + "(")
-                case Op.CALLEND:
+                case Op.PRINT:
+                    self._raw("\"" + _print_type[instr.args[0]] + "\\n\", ")
+                case Op.START:
+                    self._add(instr.args[0] + "(")
+                case Op.PREMID:
+                    self._raw(") {\n")
+                case Op.MID:
+                    self._add("} " + instr.args[0] + " {\n")
+                case Op.END:
+                    self._add("}\n\n")
+                case Op.RPAREN:
                     self._raw(")")
-                case Op.COMMA:
-                    if instr.args[0]:
-                        self._raw(", ")
-                case Op.RAW:
-                    self._raw(str(instr.args[0]))
+                case Op.LPAREN:
+                    self._raw("(")
+                case Op.RCURL:
+                    self._raw("}")
+                case Op.LCURL:
+                    self._raw("{")
+                case Op.EOL:
+                    self._raw(";")
                 case Op.RET:
                     self._add("return ")
                 case Op.IDT_M:
                     self.indent_level -= 1
                 case Op.IDT_P:
                     self.indent_level += 1
+                case Op.COMMA:
+                    if instr.args[0]:
+                        self._raw(", ")
+                case Op.RAW:
+                    self._raw(str(instr.args[0]))         
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 
@@ -226,6 +211,10 @@ class Emit:
             if current.next:
                 s += ", "
             current = current.next
-        return s
+        return s    
     
-    
+    def _create_varlist(self, instr, flag):
+        s = instr.args[0]
+        if instr.args[1]:
+            s += ","
+        self._raw(" " + s) if flag == 1 else self._raw2("" + s)

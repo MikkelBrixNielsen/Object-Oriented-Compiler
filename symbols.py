@@ -13,6 +13,7 @@ class NameCategory(Enum):
     CLASS = auto()
     INSTANCE = auto()
     ATTRIBUTE = auto()
+    ARRAY = auto()
 
 class Scope(Enum):
     FUNCTION = auto()
@@ -138,6 +139,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_variables_declaration_list(self, t):
         # Pass along its type to the variable declaration lists
+        #print(t)
         t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
@@ -222,7 +224,6 @@ class ASTSymbolVisitor(VisitorsBase):
         value = self._current_scope.lookup(t.parent)
         value.info[1].append((t.name, t.type, t))
 
-
     def midVisit_method(self, t):
         self.midVisit_function(t)
     
@@ -232,7 +233,10 @@ class ASTSymbolVisitor(VisitorsBase):
     def preVisit_statement_assignment(self, t):
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs
-    
+        if t.rhs.__class__.__name__ == "expression_new_array":
+            lhs = self._current_scope.lookup(t.lhs)
+            lhs.size = t.rhs.size
+
     def preVisit_expression_new_instance(self, t):
         t.symbol_table = self._current_scope # adds sym_table to instances
         if t.params:
@@ -246,6 +250,12 @@ class ASTSymbolVisitor(VisitorsBase):
         # Assigns types to the parameters
         if hasattr(t.exp, 'identifier'):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
+
+    def preVisit_array_list(self, t):
+        self._record_variables(t, NameCategory.ARRAY, t.exp.size)
+
+
+
 
 
     # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes

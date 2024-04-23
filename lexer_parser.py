@@ -5,15 +5,13 @@ import interfacing_parser
 import AST
 from errors import error_message
 
-
 # LEXICAL UNITS
-
 reserved = {
-    'if': 'IF',             # Not implemented
-    'then': 'THEN',         # same 
-    'else': 'ELSE',         # same
-    'while': 'WHILE',       # same
-    'do': 'DO',             # same
+    'if': 'IF',
+    'then': 'THEN',
+    'else': 'ELSE',
+    'while': 'WHILE',
+    'do': 'DO',
     'this': 'THIS',
     'function': 'FUNCTION',
     'class': 'CLASS',
@@ -24,16 +22,16 @@ reserved = {
     'float': 'FLOAT',
     'bool': 'BOOL',
     'char': 'CHAR',
+    'array': 'ARRAY',
     'instanceOf': 'INSTANCEOF',
     'extends': 'EXTENDS'
-    #'string': 'STRING'
 }
-
 
 tokens = (
     'IDENT',
     'PLUS', 'MINUS', 'TIMES', 'DIVIDE',
     'LPAREN', 'RPAREN', 'LCURL', 'RCURL',
+    'RBRAC', 'LBRAC',
     'EQ', 'NEQ', 'LT', 'GT', 'LTE', 'GTE',
     'ASSIGN', 'COMMA', 'SEMICOL', 'DOT',
 ) + tuple(reserved.values())
@@ -50,14 +48,14 @@ t_LPAREN = r'\('
 t_RPAREN = r'\)'
 t_LCURL = r'{'
 t_RCURL = r'}'
+t_LBRAC = r'\['
+t_RBRAC = r'\]'
 t_EQ = r'=='
 t_NEQ = r'!='
 t_LT = r'<'
 t_GT = r'>'
 t_LTE = r'<='
 t_GTE = r'>='
-
-
 
 def t_BOOL(t):
     r'True|False'
@@ -76,12 +74,6 @@ def t_BOOL(t):
 def t_CHAR(t):
     r'\'.?\''
     return t
-
-"""
-def t_STRING(t):
-    r'\".*\"'
-    return t
-"""
 
 def t_IDENT(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
@@ -116,15 +108,12 @@ def t_INT(t):
         t.value = 0
     return t
 
-
 # Ignored characters
 t_ignore = " \t\r"  # \r included for the sake of windows users
-
 
 def t_newline(t):
     r'\n+'
     t.lexer.lineno += t.value.count("\n")
-
 
 def t_COMMENT(t):
     r'\#.*'
@@ -136,9 +125,7 @@ def t_error(t):
                   t.lexer.lineno)
     t.lexer.skip(1)
 
-
 # PARSING RULES AND BUILDING THE AST
-
 precedence = (
     ('right', 'EQ', 'NEQ', 'LT', 'GT', 'LTE', 'GTE'),
     ('left', 'PLUS', 'MINUS'),
@@ -150,11 +137,9 @@ def p_program(t):
     'program : global_body'
     interfacing_parser.the_program = AST.function("int", "global", None, t[1], t.lexer.lineno)
 
-
 def p_empty(t):
     'empty :'
     t[0] = None
-
 
 def p_global_body(t):
     'global_body : optional_variables_declaration_list optional_assignment_list function optional_functions_declaration_list optional_class_declaration_list'
@@ -187,30 +172,42 @@ def p_optional_variables_declaration_list(t):
 
 def p_variables_declaration_list(t):
     '''variables_declaration_list : TYPE variables_list SEMICOL
-                                  | TYPE variables_list SEMICOL variables_declaration_list'''
-    if len(t) == 4:
-        t[0] = AST.variables_declaration_list(t[1], t[2], None, t.lexer.lineno)
+                                  | TYPE variables_list SEMICOL variables_declaration_list
+                                  | array_list SEMICOL
+                                  | array_list SEMICOL variables_declaration_list'''
+    if len(t) == 3:
+        t[0] = AST.variables_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
+    elif len(t) == 4:
+        if not t[1].__class__.__name__ == "array_list":
+            t[0] = AST.variables_declaration_list(t[1], t[2], None, t.lexer.lineno)
+        else:
+            t[0] = AST.variables_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
     else:
         t[0] = AST.variables_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
-
 
 def p_TYPE(t):
     '''TYPE : INT
             | FLOAT
             | BOOL
             | CHAR
-            | instance_of''' # FIXME - if the type is ident check if it is a class that has been defined!!
-    #      | STRING'''
+            | instance_of'''
     t[0] = t[1]
 
 def p_instance_of(t):
     '''instance_of : INSTANCEOF LPAREN IDENT RPAREN'''
     t[0] = t[3] + "*"
 
+def p_array(t):
+    '''array : TYPE LBRAC RBRAC'''
+    t[0] = t[1] + "[]"
 
-
-
-
+def p_array_list(t):
+    '''array_list : array IDENT ASSIGN expression_new_array
+                  | array IDENT expression_new_array COMMA array_list'''
+    if len(t) == 5:
+        t[0] = AST.array_list(t[2], t[1], t[4], None, t.lexer.lineno)
+    else:
+        t[0] = AST.array_list(t[2], t[1], t[4], t[5], t.lexer.lineno)
 
 def p_variables_list(t):
     '''variables_list : IDENT
@@ -256,8 +253,8 @@ def p_optional_attributes_declaration_list(t):
     t[0] = t[1]
 
 def p_attributes_declaration_list(t):
-    '''attributes_declaration_list : TYPE attributes_list SEMICOL
-                                   | TYPE attributes_list SEMICOL attributes_declaration_list'''
+    '''attributes_declaration_list : FT attributes_list SEMICOL
+                                   | FT attributes_list SEMICOL attributes_declaration_list'''
     if len(t) == 4:
         t[0] = AST.attributes_declaration_list(t[1], t[2], None, t.lexer.lineno)
     else:
@@ -271,11 +268,6 @@ def p_attributes_list(t):
     else:
         t[0] = AST.attributes_list(t[1], t[3], t.lexer.lineno)
 
-
-
-
-
-#same as functions but for classes - so is handled differently
 def p_optional_methods_declaration_list(t):
     '''optional_methods_declaration_list : empty
                                          | methods_declaration_list'''
@@ -290,7 +282,7 @@ def p_methods_declaration_list(t):
         t[0] = AST.methods_declaration_list(t[1], t[2], t.lexer.lineno)
 
 def p_method(t):
-    'method : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
+    'method : FUNCTION FT IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
     t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
 
 # FIXME - NOT implemented or even a part of the descriptor definiton 
@@ -302,14 +294,6 @@ def p_optional_extends(t):
         t[0] = t[1]
     else:
         t[0] = t[2] 
-
-
-
-
-
-
-
-
 
 def p_optional_functions_declaration_list(t):
     '''optional_functions_declaration_list : empty
@@ -324,16 +308,19 @@ def p_functions_declaration_list(t):
     else:
         t[0] = AST.functions_declaration_list(t[1], t[2], t.lexer.lineno)
 
-#FIXME FIGURE OUT WHY TYPE CANNOT COME BEFORE FUCNTION WITHOUT CAUSING SHIFT/REDUCE CONFLICTS
 def p_function(t):
-    'function : FUNCTION TYPE IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
+    'function : FUNCTION FT IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
     t[0] = AST.function(t[2], t[3], t[5], t[8], t.lexer.lineno)
+
+def p_FT(t):
+    '''FT : TYPE 
+          | array'''
+    t[0] = t[1]
 
 def p_optional_parameter_list(t):
     '''optional_parameter_list : empty
                                | parameter_list'''
     t[0] = t[1]
-
 
 def p_parameter_list(t):
     '''parameter_list : TYPE IDENT
@@ -342,7 +329,6 @@ def p_parameter_list(t):
         t[0] = AST.parameter_list(t[1], t[2], None, t.lexer.lineno)
     else:
         t[0] = AST.parameter_list(t[1], t[2], t[4], t.lexer.lineno)
-
 
 def p_statement(t):
     '''statement : statement_return
@@ -353,21 +339,13 @@ def p_statement(t):
                  | statement_compound''' # Don't know what this is probably delete
     t[0] = t[1]
 
-
 def p_statement_return(t):
     'statement_return : RETURN expression SEMICOL'
     t[0] = AST.statement_return(t[2], t.lexer.lineno)
 
-
 def p_statement_print(t):
     'statement_print : PRINT LPAREN expression RPAREN SEMICOL'
     t[0] = AST.statement_print(t[3], t.lexer.lineno)
-
-
-
-
-
-
 
 def p_statement_assignment(t):
     'statement_assignment : lhs ASSIGN expression SEMICOL'
@@ -382,31 +360,30 @@ def p_lhs(t):
     else: 
         t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
-
-
-
-
-# FIXME NOT IMPLEMENTED
 def p_statement_ifthenelse(t):
     'statement_ifthenelse : IF expression THEN statement ELSE statement'
     t[0] = AST.statement_ifthenelse(t[2], t[4], t[6], t.lexer.lineno)
 
-
-
-
-
-
-
-
-# FIXME NOT IMPLEMENTED
 def p_statement_while(t):
     'statement_while :  WHILE expression DO statement'
     t[0] = AST.statement_while(t[2], t[4], t.lexer.lineno)
+
+
+
+
+
+
+
+
+
 
 # FIXME NOT IMPLEMENTED
 def p_statement_compound(t):
     'statement_compound :  LCURL statement_list RCURL'
     t[0] = t[2]
+
+
+
 
 
 
@@ -439,9 +416,22 @@ def p_expression(t):
                   | expression_this_attribute
                   | expression_method
                   | expression_this_method
-                  | expression_new_instance'''
+                  | expression_new_instance
+                  | expression_new_array'''
     t[0] = t[1]
 
+def p_expression_new_array(t):
+    'expression_new_array : NEW ARRAY LPAREN TYPE COMMA INT optional_data RPAREN'
+    t[0] = AST.expression_new_array(t[4], t[6], t[7], t.lexer.lineno)
+
+def p_optional_data(t):
+    '''optional_data : empty
+                     | COMMA LBRAC expression_list RBRAC'''
+    if len(t) == 2:
+        t[0] = t[1]
+    else:
+        t[0] = t[3]
+    
 def p_expression_new_instance(t):
     'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN'
     t[0] = AST.expression_new_instance(t[2], t[4], t.lexer.lineno)
@@ -463,52 +453,33 @@ def p_expression_integer(t):
     'expression_integer : INT'
     t[0] = AST.expression_integer(t[1], t.lexer.lineno)
 
-
 def p_expression_float(t):
     'expression_float : FLOAT'
     t[0] = AST.expression_float(t[1], t.lexer.lineno)
-
 
 def p_expression_bool(t):
     'expression_bool : BOOL'
     t[0] = AST.expression_boolean(t[1], t.lexer.lineno)
 
-
 def p_expression_char(t):
     'expression_char : CHAR'
     t[0] = AST.expression_char(t[1], t.lexer.lineno)
-
-"""
-def p_expression_string(t):
-    'expression_string : STRING'
-    t[0] = AST.expression_string(t[1], t.lexer.lineno)
-"""
 
 def p_expression_identifier(t):
     'expression_identifier : IDENT'
     t[0] = AST.expression_identifier(t[1], t.lexer.lineno)
 
-
 def p_expression_call(t):
     'expression_call : IDENT LPAREN optional_expression_list RPAREN'
     t[0] = AST.expression_call(t[1], t[3], t.lexer.lineno)
 
-
-
-
-
-
-
-# For recognizing "this." syntax
 def p_expression_this_attribute(t):
     'expression_this_attribute : THIS DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
-# For accessing an attribute on a class 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
-
 
 def p_expression_this_method(t):
     'expression_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'
@@ -517,13 +488,6 @@ def p_expression_this_method(t):
 def p_expression_method(t):
     'expression_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'
     t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
-
-
-
-
-
-
-
 
 def p_expression_binop(t):
     '''expression_binop : expression PLUS expression
@@ -538,13 +502,10 @@ def p_expression_binop(t):
                         | expression GTE expression'''
     t[0] = AST.expression_binop(t[2], t[1], t[3], t.lexer.lineno)
 
-
-
 def p_optional_expression_list(t):
     '''optional_expression_list : empty
                                 | expression_list'''
     t[0] = t[1]
-
 
 def p_expression_list(t):
     '''expression_list : expression
@@ -553,7 +514,6 @@ def p_expression_list(t):
         t[0] = AST.expression_list(t[1], None, t.lexer.lineno)
     else:
         t[0] = AST.expression_list(t[1], t[3], t.lexer.lineno)
-
 
 def p_error(t):
     try:
@@ -565,7 +525,6 @@ def p_error(t):
     error_message("Syntax Analysis",
                   f"Problem detected{cause}.",
                   location)
-
 
 # Build the lexer
 lexer = lex.lex()

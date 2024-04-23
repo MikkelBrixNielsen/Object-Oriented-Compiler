@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+
 from typing import Any
 
 
@@ -402,14 +403,36 @@ class expression_char:
     def accept(self, visitor):
         visitor.postVisit(self)
 
-@dataclass
-class expression_string:
-    string: str
-    lineno: int
-    type: Any = field(default="string")
 
+@dataclass
+class array_list:
+    variable: Any
+    type: Any
+    exp: Any
+    next: Any
+    lineno: int
 
     def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.exp:
+            self.exp.accept(visitor)
+        visitor.midVisit(self)
+        if self.next:
+            self.next.accpet(visitor)
+        visitor.postVisit(self)
+
+
+@dataclass
+class expression_new_array:
+    type: Any
+    size: Any
+    data: Any
+    lineno: int
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.data:
+            self.data.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass
@@ -417,7 +440,6 @@ class expression_identifier:
     identifier: str
     lineno: int
     type: Any = field(default=None)
-
 
     def accept(self, visitor):
         visitor.postVisit(self)
