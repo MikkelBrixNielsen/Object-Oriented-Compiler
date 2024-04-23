@@ -18,7 +18,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
         # checks if the extensions is actually a class 
-        # FIXME If multi-inheritance is implemented expand this to check all the extensions 
         super = t.extends
         if super:
             if super == t.name:
@@ -46,7 +45,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_method(self, t):
         self._current_scope = self._current_scope.parent
         self._function_type_match_return_type(t)
-
 
     def postVisit_statement_assignment(self, t):
         lhs = None

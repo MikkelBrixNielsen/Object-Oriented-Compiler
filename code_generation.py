@@ -77,6 +77,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._code.append(instruction)
 
     def preVisit_variables_declaration_list(self, t):
+        if t.decl.__class__.__name__ == "array_list":
+            t.type = t.type[:-2]
         self._app(Ins(Op.TYPE, t.type))
 
     def midVisit_variables_declaration_list(self, t):
@@ -177,6 +179,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_attributes_declaration_list(self, t):
+        if t.decl.__class__.__name__ == "array_list":
+            t.type = t.type[:-2]
         self._app(Ins(Op.TYPE2, t.type))
 
     def midVisit_attributes_declaration_list(self, t):
@@ -191,6 +195,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_function(self, t):
         self._current_scope = t.symbol_table
         if not t.name == "global":
+            if str(t.type)[-2:] == "[]":
+                t.type = t.type[:-2] + "*"
             self._app(Ins(Op.TYPE, t.type))
             self._app(Ins(Op.START, " " + t.name))
             self._app(Ins(Op.IDT_P))
@@ -286,10 +292,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_array_list(self, t):
         s = " " + t.variable + "[" + str(t.exp.size) + "]"
+        flag = 0 if not t.name else 1
         if t.exp.data:
-            self._app(Ins(Op.ASSIGN, s))
-        else: 
-            self._app(Ins(Op.RAW, s))
+              self._app(Ins(Op.ASSIGN, s, flag))
+        else:
+            self._app(Ins(Op.RAW, s, flag))
+
+    
+
+
+
 
     def preVisit_expression_new_array(self, t):
         if t.data:

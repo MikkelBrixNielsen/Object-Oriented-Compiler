@@ -101,6 +101,14 @@ class ASTSymbolVisitor(VisitorsBase):
                     "Symbol Collection",
                     f"Redeclaration of function '{t.name}' in the same scope.",
                     t.lineno)
+            current = t.body.stm_list
+            while current.next:
+                current = current.next
+            exp = current.stm.exp.__class__.__name__
+            if exp == "expression_new_array" or "expression_new_instance" == exp:
+                error_message("Symnol Collection",
+                              f"Object instantiation not allowed as return value.",
+                              t.lineno)
                 
             self._current_scope.insert(
                 t.name, SymVal(NameCategory.FUNCTION, t.type, self._current_level, t))
@@ -237,6 +245,14 @@ class ASTSymbolVisitor(VisitorsBase):
             lhs = self._current_scope.lookup(t.lhs)
             lhs.size = t.rhs.size
 
+    def postVisit_statement_return(self, t):
+        if t.exp.__class__.__name__ == "expression_identifier":
+            val = self._current_scope.lookup_this_scope(t.exp.identifier)
+            if val:
+                error_message("Symbol Collection",
+                              f"Returning local variable '{t.exp.identifier}'.",
+                              t.lineno)
+
     def preVisit_expression_new_instance(self, t):
         t.symbol_table = self._current_scope # adds sym_table to instances
         if t.params:
@@ -252,7 +268,14 @@ class ASTSymbolVisitor(VisitorsBase):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
     def preVisit_array_list(self, t):
-        self._record_variables(t, NameCategory.ARRAY, t.exp.size)
+        if t.name:
+            if t.exp.data:
+                error_message("Symbol Collection",
+                              f"Cannot initialize class array members directly at the point of declaration within the class definition.",
+                              t.lineno)
+            value = self._current_scope.lookup(t.name)
+            value.info[0].append((t.variable, t.type))
+        self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name)
 
 
 

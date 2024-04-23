@@ -260,23 +260,6 @@ class expression_method:
             self.exp_list.accept(visitor)
         visitor.postVisit(self)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @dataclass
 class statement_return:
     exp: Any
@@ -411,10 +394,11 @@ class array_list:
     exp: Any
     next: Any
     lineno: int
+    name: Any = field(default=None)
 
     def accept(self, visitor):
         visitor.preVisit(self)
-        if self.exp:
+        if self.exp and not self.name:
             self.exp.accept(visitor)
         visitor.midVisit(self)
         if self.next:
@@ -484,10 +468,6 @@ class expression_list:
         if self.next:
             self.next.accept(visitor)
         visitor.postVisit(self)
-
-
-
-
 
 @dataclass
 class expression_new_instance:

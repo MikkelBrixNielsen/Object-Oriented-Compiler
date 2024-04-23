@@ -121,7 +121,9 @@ class Emit:
                 case Op.PARAMS:
                     self._addParam(instr)
                 case Op.ASSIGN:
-                    self._raw(instr.args[0] + " = ")
+                    s = instr.args[0] + " = "
+                    self._raw2(s) if len(instr.args) > 1 and instr.args[1] == 1 else self._raw(s)
+                        
                 case Op.INSTANCE:
                     struct = instr.args[0]
                     self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
@@ -165,7 +167,8 @@ class Emit:
                     if instr.args[0]:
                         self._raw(", ")
                 case Op.RAW:
-                    self._raw(str(instr.args[0]))         
+                    s = str(instr.args[0])
+                    self._raw2(s) if len(instr.args) > 1 and instr.args[1] == 1 else self._raw(s)
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 
