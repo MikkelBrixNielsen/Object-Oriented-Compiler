@@ -373,7 +373,6 @@ class expression_boolean:
     lineno: int
     type: Any = field(default="bool")
 
-
     def accept(self, visitor):
         visitor.postVisit(self)
 
@@ -417,6 +416,16 @@ class expression_new_array:
         visitor.preVisit(self)
         if self.data:
             self.data.accept(visitor)
+        visitor.postVisit(self)
+
+@dataclass
+class expression_array_indexing:
+    identifier: Any
+    idx: int
+    lineno: int
+    type: Any = field(default=None)
+
+    def accept(self, visitor):
         visitor.postVisit(self)
 
 @dataclass

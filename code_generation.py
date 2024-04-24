@@ -187,7 +187,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.EOL2))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST2, t.variable, t.next))
+        self._app(Ins(Op.VARLIST2, " " + t.variable, t.next))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier))
@@ -213,6 +213,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._current_scope = self._current_scope.parent
 
     def preVisit_parameter_list(self, t):
+        if t.type[-2:] == "[]":
+            t.type = t.type[:-2]
+            t.parameter = "*" + t.parameter
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
 
     def preVisit_expression_call(self, t):
@@ -298,11 +301,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         else:
             self._app(Ins(Op.RAW, s, flag))
 
-    
-
-
-
-
     def preVisit_expression_new_array(self, t):
         if t.data:
             self._app(Ins(Op.LCURL))
@@ -310,6 +308,20 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_new_array(self, t):
         if t.data:
             self._app(Ins(Op.RCURL))
+
+    def postVisit_expression_array_indexing(self, t):
+        val = self._current_scope.lookup(t.identifier)
+        if not val.cat == NameCategory.PARAMETER:
+            current_idx = 0
+            current = val.info[-3]
+            while current:
+                current = current.next
+                current_idx += 1
+
+        self._app(Ins(Op.RAW, f"{t.identifier}[{t.idx}]"))
+
+    # Design choice just return 0 if array index is not initialized or throw error?
+
 
 # auxies
     # FIXME - RUNNING NUMBER

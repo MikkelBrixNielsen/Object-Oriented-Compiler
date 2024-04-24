@@ -330,8 +330,8 @@ def p_optional_parameter_list(t):
     t[0] = t[1]
 
 def p_parameter_list(t):
-    '''parameter_list : TYPE IDENT
-                      | TYPE IDENT COMMA parameter_list'''
+    '''parameter_list : FT IDENT
+                      | FT IDENT COMMA parameter_list'''
     if len(t) == 3:
         t[0] = AST.parameter_list(t[1], t[2], None, t.lexer.lineno)
     else:
@@ -410,7 +410,6 @@ def p_statement_list(t):
     else:
         t[0] = AST.statement_list(t[1], t[2], t.lexer.lineno)
 
-# FIXME NOT IMPLEMENTE groupe / string 
 def p_expression(t):
     '''expression : expression_integer
                   | expression_float
@@ -424,8 +423,20 @@ def p_expression(t):
                   | expression_method
                   | expression_this_method
                   | expression_new_instance
-                  | expression_new_array'''
+                  | expression_new_array
+                  | expression_array_indexing'''
     t[0] = t[1]
+
+
+def p_expression_array_indexing(t):
+    'expression_array_indexing : IDENT LBRAC index RBRAC'
+    t[0] = AST.expression_array_indexing(t[1], t[3], t.lexer.lineno)
+
+def p_index(t):
+    '''index : IDENT
+             | INT'''
+    t[0] = t[1]
+
 
 def p_expression_new_array(t):
     'expression_new_array : NEW ARRAY LPAREN TYPE COMMA INT optional_data RPAREN'

@@ -34,7 +34,7 @@ class Emit:
         self.max_width = 80
         self.indent = 4
         self.indent_level = 0
-        self.includes = ["#include <stdlib.h>", "\n#include <stdio.h>"]
+        self.includes = ["#include <stdlib.h>", "\n#include <stdio.h>", "\n#include <stddef.h>"]
         self.signatures = ["\n"]
         self.classes = []
         self.code = []

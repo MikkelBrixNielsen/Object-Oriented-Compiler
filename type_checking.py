@@ -192,6 +192,9 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         t.type = t.type + "[]"
 
+    def postVisit_expression_array_indexing(self, t):
+        t.type = t.type[:-2]
+
     # The auxiliaries
     def _is_boolean_convertable(self, t):
         immediate_conversion = ["int", "float", "char", "expression_integer", "expression_float", 

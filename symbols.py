@@ -104,6 +104,10 @@ class ASTSymbolVisitor(VisitorsBase):
             current = t.body.stm_list
             while current.next:
                 current = current.next
+            if not current.stm.__class__.__name__ == "statement_return":
+                error_message("Symbol Collection", 
+                              f"Missing return statement in function.",
+                              t.lineno)
             exp = current.stm.exp.__class__.__name__
             if exp == "expression_new_array" or "expression_new_instance" == exp:
                 error_message("Symnol Collection",
@@ -246,11 +250,58 @@ class ASTSymbolVisitor(VisitorsBase):
             lhs.size = t.rhs.size
 
     def postVisit_statement_return(self, t):
-        if t.exp.__class__.__name__ == "expression_identifier":
-            val = self._current_scope.lookup_this_scope(t.exp.identifier)
-            if val:
+        cn = t.exp.__class__.__name__
+        self._check_if_initialized(cn, t.exp)
+
+    def _check_if_initialized(self, cn, t):
+        if (not cn == "expression_integer" and not cn == "expression_float" and 
+            not cn == "expression_bool" and not cn == "expression_char"):
+            if cn == "expression_identifier":
+                val = self._current_scope.lookup_this_scope(t.identifier)
+                if val and not val.cat == NameCategory.PARAMETER:
+                    error_message("Symbol Collection",
+                                  f"Returning local variable '{t.identifier}'.",
+                                  t.lineno)
+
+            ident = self._get_identifier(t)
+            val = None
+            if cn == "expression_binop":
+                self._check_if_initialized(t.lhs.__class__.__name__, t.lhs)
+                self._check_if_initialized(t.rhs.__class__.__name__, t.rhs)
+                # if neither of lsh or rhs fails the initialization check then
+                # there exists a value
+                val = True
+            elif (cn == "expression_method" or cn == "expression_this_method" or 
+                  cn == "expression_attribute" or cn == "expression_this_attribute"):
+                val = self._current_scope.parent.lookup_this_scope(ident)
+            else:
+                val = self._current_scope.lookup_this_scope(ident)
+            if not val:
                 error_message("Symbol Collection",
-                              f"Returning local variable '{t.exp.identifier}'.",
+                                f"Accessing variable before initialisation.",
+                                t.lineno)
+
+    def _get_identifier(self, t):
+        match t.__class__.__name__:
+            case "expression_integer" | "expression_boolean":
+                return t.integer
+            case "expression_float":
+                return t.double
+            case "expression_char":
+                return t.char
+            case "expression_identifier" | "expression_array_indexing":
+                return t.identifier
+            case "expression_call" | "expression_method" | "expression_this_method":
+                return t.name
+            case "expression_binop":
+                return (self._get_identifier(t.lhs), self._get_identifier(t.rhs))
+            case "expression_attribute" | "expression_this_attribute":
+                return t.field
+            case "expression_new_instance" | "expression_new_array":
+                return None
+            case _:
+                error_message("Symbol Collection",
+                              f"_get_identifier does not implement {t.__class__.__name__}",
                               t.lineno)
 
     def preVisit_expression_new_instance(self, t):
@@ -275,11 +326,20 @@ class ASTSymbolVisitor(VisitorsBase):
                               t.lineno)
             value = self._current_scope.lookup(t.name)
             value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name)
+        self._record_variables(t, NameCategory.ARRAY, t.exp.data, t.exp.size, t.name)
 
+    def postVisit_expression_array_indexing(self, t):
+        val = self._current_scope.lookup(t.identifier)
+        if not val:
+            error_message("Symobl Collection",
+                          f"Array access before declaration of '{t.identifier}'.",
+                          t.lineno)
 
-
-
+        if not val.cat == NameCategory.PARAMETER and not isinstance(t.idx, str) and val.info[-2] <= t.idx:
+            error_message("Symbol Collection",
+                          f"Index out of bounds s[{t.idx}]: '{t.identifier}' has {val.info[-2]} elements",
+                          t.lineno)
+        t.type = val.type
 
     # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
     # TODO - Make new syntax work to create class instances 
