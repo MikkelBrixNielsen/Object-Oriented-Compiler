@@ -14,6 +14,7 @@ class NameCategory(Enum):
     INSTANCE = auto()
     ATTRIBUTE = auto()
     ARRAY = auto()
+    THIS = auto()
 
 class Scope(Enum):
     FUNCTION = auto()
@@ -101,6 +102,11 @@ class ASTSymbolVisitor(VisitorsBase):
                     "Symbol Collection",
                     f"Redeclaration of function '{t.name}' in the same scope.",
                     t.lineno)
+            if not t.body.variables_decl and not t.body.functions_decl and not t.body.stm_list:
+                error_message(
+                    "Symbol Collection",
+                    f"The body of the function '{t.name}' is empty.",
+                    t.lineno)
             current = t.body.stm_list
             while current.next:
                 current = current.next
@@ -121,6 +127,9 @@ class ASTSymbolVisitor(VisitorsBase):
         self._current_scope = SymbolTable(self._current_scope)
         # Saving the current symbol table in the AST for future use:
         t.symbol_table = self._current_scope
+        if t.__class__.__name__ == "method":
+            self._current_scope.insert(
+                NameCategory.THIS, SymVal(t.parent, t.parent+"*", self._current_level, []))
         t.scope_level = self._current_level
         # Preparing for the processing of formal parameters:
         self.parameter_offset = 0
@@ -299,9 +308,10 @@ class ASTSymbolVisitor(VisitorsBase):
                 # if neither of lsh or rhs fails the initialization check then
                 # there exists a value
                 val = True
-            elif (cn == "expression_method" or cn == "expression_this_method" or 
-                  cn == "expression_attribute" or cn == "expression_this_attribute"):
+            elif (cn == "expression_method" or cn == "expression_attribute"):
                 val = self._current_scope.parent.lookup_this_scope(ident)
+                if not val and t.inst == "this":
+                    val = True              
             else:
                 val = self._current_scope.lookup_this_scope(ident)
             if not val:
@@ -319,11 +329,11 @@ class ASTSymbolVisitor(VisitorsBase):
                 return t.char
             case "expression_identifier" | "expression_array_indexing":
                 return t.identifier
-            case "expression_call" | "expression_method" | "expression_this_method":
+            case "expression_call" | "expression_method":
                 return t.name
             case "expression_binop":
                 return (self._get_identifier(t.lhs), self._get_identifier(t.rhs))
-            case "expression_attribute" | "expression_this_attribute":
+            case "expression_attribute":
                 return t.field
             case "expression_new_instance" | "expression_new_array":
                 return None
@@ -362,27 +372,11 @@ class ASTSymbolVisitor(VisitorsBase):
             error_message("Symobl Collection",
                           f"Array access before declaration of '{t.identifier}'.",
                           t.lineno)
-
-        # TODO - implement index out of bound checking for what is possible
-                # expression integer 
-                # identifier
-                # expression_array_indexing
-                # expression_this_attribute
-                # expression_attribute
-                # binop when lhs and rhs is one of the above
-
-
-        if not val.cat == NameCategory.PARAMETER and isinstance(t.idx, int) and val.info[-2] <= t.idx:
-            error_message("Symbol Collection",
-                          f"Index out of bounds s[{t.idx}]: '{t.identifier}' has {val.info[-2]} elements",
-                          t.lineno)
         t.type = val.type
 
     # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
     # TODO - Make new syntax work to create class instances 
     # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
-
-
 
 # Auxiliaries
     def _record_variables(self, t, *args): # maybe don't need to be *args

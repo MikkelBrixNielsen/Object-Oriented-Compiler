@@ -4,7 +4,6 @@ from visitors_base import VisitorsBase
 from symbols import NameCategory
 import AST
 
-
 class Op(Enum):
     """Defines various operations."""
     ADD = auto()
@@ -17,41 +16,36 @@ class Op(Enum):
     LTE = auto()
     GT = auto()
     GTE = auto()
-    TYPE = auto()       # specifies that type for function and type infront of variable declaration lists should be printed
-    EOL = auto()        # End of line (appends ";")
+
+    TYPE = auto()
     RET = auto()
+
     INDENT = auto()
-    IDT_M = auto()
-    IDT_P = auto()
-    VARLIST = auto()
-    PARAMS = auto()
-    ASSIGN = auto()
-    SIGNATURE = auto()
+    IDTL_M = auto()
+    IDTL_P = auto()
+    
     CALLSTART = auto()
     CALLEND = auto()
+    
     CLASS = auto()
     CLASSMID = auto()
     THIS = auto()
     INSTANCE = auto()
     ATTRASSIGN = auto()
 
-    TYPE2 = auto()
-    EOL2 = auto()  
-    VARLIST2 = auto()
+    VARLIST = auto()
+    PARAMS = auto()
+    ASSIGN = auto()
+    SIGNATURE = auto()
 
     START = auto()
     PREMID = auto()
     MID = auto()
     POSTMID = auto()
     END = auto()
-    RPAREN = auto()
-    LPAREN = auto()
-    LCURL = auto()
-    RCURL = auto()
     PRINT = auto()
     COMMA = auto()
     RAW = auto()
-
 
 class Ins:
     """Representation of an instruction with an opcode, a number of
@@ -63,7 +57,6 @@ class Ins:
         self.comment = c
 
 # Code Generation
-
 class ASTCodeGenerationVisitor(VisitorsBase):
     """Implements the intermediate code generation from the AST."""
     def __init__(self):
@@ -82,7 +75,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.TYPE, t.type))
 
     def midVisit_variables_declaration_list(self, t):
-        self._app(Ins(Op.EOL))
+        self._app(Ins(Op.RAW, ";"))
 
     def preVisit_variables_list(self, t):
         self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
@@ -98,47 +91,47 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ASSIGN, lhs))
 
     def postVisit_statement_assignment(self, t):
-        self._app(Ins(Op.EOL))
+        self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
         self._app(Ins(Op.RET))
 
     def postVisit_statement_return(self, t):
-        self._app(Ins(Op.EOL))
+        self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_print(self, t):
         self._app(Ins(Op.START, "printf"))
         self._app(Ins(Op.PRINT, t.exp.type))
 
     def postVisit_statement_print(self, t):
-        self._app(Ins(Op.RPAREN))
-        self._app(Ins(Op.EOL))
+        self._app(Ins(Op.RAW, ")"))
+        self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_ifthenelse(self, t):
         self._app(Ins(Op.START, "if"))
-        self._app(Ins(Op.IDT_P))
+        self._app(Ins(Op.IDTL_P))
 
     def preMidVisit_statement_ifthenelse(self, t):
         self._app(Ins(Op.PREMID))
 
     def postMidVisit_statement_ifthenelse(self, t):
-        self._app(Ins(Op.IDT_M))
+        self._app(Ins(Op.IDTL_M))
         self._app(Ins(Op.MID, "else"))
-        self._app(Ins(Op.IDT_P))
+        self._app(Ins(Op.IDTL_P))
 
     def postVisit_statement_ifthenelse(self, t):
-        self._app(Ins(Op.IDT_M))
+        self._app(Ins(Op.IDTL_M))
         self._app(Ins(Op.END))
 
     def preVisit_statement_while(self, t):
         self._app(Ins(Op.START, "while"))
-        self._app(Ins(Op.IDT_P))
+        self._app(Ins(Op.IDTL_P))
 
     def midVisit_statement_while(self, t):
         self._app(Ins(Op.PREMID))
 
     def postVisit_statement_while(self, t):
-        self._app(Ins(Op.IDT_M))
+        self._app(Ins(Op.IDTL_M))
         self._app(Ins(Op.END))
 
     def postVisit_expression_integer(self, t):
@@ -181,13 +174,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_attributes_declaration_list(self, t):
         if t.decl.__class__.__name__ == "array_list":
             t.type = t.type[:-2]
-        self._app(Ins(Op.TYPE2, t.type))
+        self._app(Ins(Op.TYPE, t.type))
 
     def midVisit_attributes_declaration_list(self, t):
-        self._app(Ins(Op.EOL2))
+        self._app(Ins(Op.RAW, ";"))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST2, " " + t.variable, t.next))
+        self._app(Ins(Op.VARLIST, " " + t.variable, t.next))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier))
@@ -199,7 +192,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 t.type = t.type[:-2] + "*"
             self._app(Ins(Op.TYPE, t.type))
             self._app(Ins(Op.START, " " + t.name))
-            self._app(Ins(Op.IDT_P))
+            self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, t.name, t.par_list))
     
     def midVisit_function(self, t):
@@ -208,7 +201,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def postVisit_function(self, t):
         if not t.name == "global":
-            self._app(Ins(Op.IDT_M))
+            self._app(Ins(Op.IDTL_M))
             self._app(Ins(Op.END))
         self._current_scope = self._current_scope.parent
 
@@ -220,10 +213,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, t.name))
-        self._app(Ins(Op.LPAREN))
+        self._app(Ins(Op.RAW, "("))
     
     def postVisit_expression_call(self, t):
-        self._app(Ins(Op.RPAREN))
+        self._app(Ins(Op.RAW, ")"))
 
     def midVisit_expression_list(self, t):
         self._app(Ins(Op.COMMA, t.next))
@@ -263,12 +256,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def midVisit_instance_expression_list(self, t):
         if t.next:
-            self._app(Ins(Op.EOL))
+            self._app(Ins(Op.RAW, ";"))
     
     def postVisit_expression_attribute(self, t):
         cd = None
         if t.inst == "this":
-            cd = self._current_scope.lookup(self._current_scope.parent.lookup_this_scope(t.field).info[-1])
+            cd = self._current_scope.lookup(self._current_scope.lookup(NameCategory.THIS).cat)
         else:
             cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
         
@@ -293,55 +286,26 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
 
-
-
-
-# FIXME - Code for generating arrays as part of structs is broken
-
-
     def preVisit_array_list(self, t):
         s = " " + t.variable + f"["
-        self._app(Ins(Op.RAW, s, 0 if not t.name else 1))
-        if t.name:
-            self._accept_array_exp(t)
-    
-    def _accept_array_exp(self, t):
-        self._app(Ins(Op.RAW, "]", 1))
-
-
+        self._app(Ins(Op.RAW, s))
+  
     def midVisit_expression_new_array(self, t):
         if t.data:
             self._app(Ins(Op.ASSIGN, "]"))
-            
-            self._app(Ins(Op.LCURL))
+            self._app(Ins(Op.RAW, "{"))
         else:
             self._app(Ins(Op.RAW, "]"))
 
     def postVisit_expression_new_array(self, t):
         if t.data:
-            self._app(Ins(Op.RCURL))
+            self._app(Ins(Op.RAW, "}"))
         
     def preVisit_expression_array_indexing(self, t):
-        val = self._current_scope.lookup(t.identifier)
-        if not val.cat == NameCategory.PARAMETER:
-            current_idx = 0
-            current = val.info[-3]
-            while current:
-                current = current.next
-                current_idx += 1
         self._app(Ins(Op.RAW, f"{t.identifier}["))
 
     def postVisit_expression_array_indexing(self, t):
         self._app(Ins(Op.RAW, "]"))
-
-
-
-
-
-
-
-
-
 
 # auxies
     # FIXME - RUNNING NUMBER
@@ -385,13 +349,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                                 self._app(Ins(Op.RAW, "''"))
                             case _:
                                 print(f"{current_param.exp.type} not implemented in _extension_instance in code generation - please fix")
-                    self._app(Ins(Op.EOL))
+                    self._app(Ins(Op.RAW, ";"))
                     current_param = current_param.next
 
         # Assigns created struct to its parent class
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.RAW, t.identifier + "->" + temp + " = " + temp))
-            self._app(Ins(Op.EOL))
+            self._app(Ins(Op.RAW, ";"))
 
     # FIXME Make it so code is generated for the extensions 
     # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
@@ -400,31 +364,31 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def _extend_class(self, t):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
-                self._app(Ins(Op.TYPE2, cd.info[2][0] + "*"))
-                self._app(Ins(Op.VARLIST2, cd.info[2][0].lower(), None))
-                self._app(Ins(Op.EOL2)) 
+                self._app(Ins(Op.TYPE, cd.info[2][0] + "*"))
+                self._app(Ins(Op.VARLIST, cd.info[2][0].lower(), None))
+                self._app(Ins(Op.RAW, ";"))
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
                 # FIXME - We probably should not add the attributes from the extended class to the actual class 
                 if len(member) < 3: # Attribute
                     # TODO - DELETE maybe
-                    #self._app(Ins(Op.TYPE2, member[1]))
-                    #self._app(Ins(Op.VARLIST2, member[0], None))
-                    #self._app(Ins(Op.EOL2))
+                    #self._app(Ins(Op.TYPE, member[1]))
+                    #self._app(Ins(Op.VARLIST, member[0], None))
+                    #self._app(Ins(Op.RAW, ";"))
                     pass
                 else: # method
-                    self._app(Ins(Op.IDT_M)) # remove indentation level 
+                    self._app(Ins(Op.IDTL_M)) # remove indentation level 
                     self._app(Ins(Op.TYPE, member[1]))
                     self._app(Ins(Op.START, " " + t.name + "_" + member[0]))
-                    self._app(Ins(Op.IDT_P))
+                    self._app(Ins(Op.IDTL_P))
                     self._app(Ins(Op.PARAMS, t.name + "*", "this", None))
                     self._app(Ins(Op.PREMID))
                     self._app(Ins(Op.RET))
                     self._app(Ins(Op.RAW, cd.info[2][0] + "_" + member[0] + "(this->" + cd.info[2][0].lower() + ")"))
-                    self._app(Ins(Op.EOL))
-                    self._app(Ins(Op.IDT_M)) # remove indentation level 
+                    self._app(Ins(Op.RAW, ";"))
+                    self._app(Ins(Op.IDTL_M)) # remove indentation level 
                     self._app(Ins(Op.END))
-                    self._app(Ins(Op.IDT_P)) # add indentation level
+                    self._app(Ins(Op.IDTL_P)) # add indentation level
                     self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0], AST.parameter_list(t.name + "*", "this", None, -1)))
 
     def _is_member_in_tuple_list(self, m, tl):

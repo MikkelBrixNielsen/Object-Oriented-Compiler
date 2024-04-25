@@ -142,7 +142,7 @@ def p_empty(t):
     t[0] = None
 
 def p_global_body(t):
-    'global_body : optional_variables_declaration_list optional_assignment_list function optional_functions_declaration_list optional_class_declaration_list'
+    'global_body : optional_variables_declaration_list optional_assignment_list optional_class_declaration_list function optional_functions_declaration_list'
     t[0] = AST.global_body(t[1], t[2], t[3], t[4], t[5], t.lexer.lineno)
 
 def p_optional_assignment_list(t):
@@ -163,6 +163,10 @@ def p_assignment_list(t):
 # FIXME - includes instance syntax and this. syntax the latter should only be allowed in classes though
 def p_body(t):
     'body : optional_variables_declaration_list optional_functions_declaration_list optional_statement_list'
+    t[0] = AST.body(t[1], t[2], t[3], t.lexer.lineno)
+
+def p_method_body(t):
+    'method_body : optional_variables_declaration_list optional_methods_declaration_list optional_statement_list'
     t[0] = AST.body(t[1], t[2], t[3], t.lexer.lineno)
 
 def p_optional_variables_declaration_list(t):
@@ -289,14 +293,13 @@ def p_methods_declaration_list(t):
         t[0] = AST.methods_declaration_list(t[1], t[2], t.lexer.lineno)
 
 def p_method(t):
-    'method : FUNCTION FT IDENT LPAREN optional_parameter_list RPAREN LCURL body RCURL'
+    'method : FUNCTION FT IDENT LPAREN optional_parameter_list RPAREN LCURL method_body RCURL'
     t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
 
 # FIXME - NOT implemented or even a part of the descriptor definiton 
 def p_optional_extends(t):
     '''optional_extends : empty
                         | EXTENDS IDENT'''
-                        # FIXME| EXTENDS ident_list''' # EXTENDS IDENT, IDENT, IDENT ...
     if len(t) == 2:
         t[0] = t[1]
     else:

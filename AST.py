@@ -5,28 +5,25 @@ from typing import Any
 class global_body:
     variables_decl: Any
     assignment_list: Any
+    class_decl: Any
     main_function: Any
     functions_decl: Any
-    class_decl: Any
     lineno: int
 
     def accept(self, visitor):
         visitor.preVisit(self)
         if self.variables_decl:
             self.variables_decl.accept(visitor)
-
         if self.assignment_list:
             self.assignment_list.accept(visitor)
-
-        if self.main_function and self.main_function.name:
+        if self.class_decl:
+            self.class_decl.accept(visitor)
+        if self.main_function:
             self.main_function.accept(visitor)
-
         visitor.preMidVisit(self)
         if self.functions_decl:
             self.functions_decl.accept(visitor)
-
-        if self.class_decl:
-            self.class_decl.accept(visitor)
+        
         visitor.postMidVisit(self)
 
 @dataclass
@@ -44,7 +41,6 @@ class body:
         if self.functions_decl:
             self.functions_decl.accept(visitor)
         visitor.postMidVisit(self)
-        # FIXME THIS MIGHT BE OKAY MAYBE NOT IF NOT OKAY DELETE THE IF AND MAKE STM_LIST REQUIRED AGAIN
         if self.stm_list:
             self.stm_list.accept(visitor)
         visitor.postVisit(self)
@@ -380,7 +376,7 @@ class array_list:
 
     def accept(self, visitor):
         visitor.preVisit(self)
-        if self.exp and not self.name:
+        if self.exp:
             self.exp.accept(visitor)
         visitor.midVisit(self)
         if self.next:

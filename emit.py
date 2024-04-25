@@ -36,7 +36,6 @@ class Emit:
         self.indent_level = 0
         self.includes = ["#include <stdlib.h>", "\n#include <stdio.h>", "\n#include <stddef.h>"]
         self.signatures = ["\n"]
-        self.classes = []
         self.code = []
 
     def emit(self):
@@ -46,8 +45,7 @@ class Emit:
     def get_code(self):
         self.includes.append("\n")
         self.signatures.append("\n")
-        self.classes.append("\n")
-        self.includes += self.signatures + self.classes + self.code
+        self.includes += self.signatures + self.code
         return "".join(self.includes).replace(";", ";\n")
 
     def _format_comment(self, comment):
@@ -76,14 +74,8 @@ class Emit:
     def _raw(self, s):
         self.code.append(s)
 
-    def _raw2(self, s):
-        self.classes.append(s)
-
     def _add(self, s, comment=""):
         self._addAux(s, self.code, comment)
-
-    def _add2(self, s, comment=""):
-        self._addAux(s, self.classes, comment)
 
     def _addSignature(self, s, comment=""):
         temp = self.indent_level
@@ -102,28 +94,19 @@ class Emit:
             self._simpleInstruction(instr)
         else:
             match instr.opcode:
-                # FIXME - THIS IS FUCKING SHIT ADD2!??!?!? raw2 ?!?!?! WHAT EVEN IS THIS GARBAGE!?!?!?!?!
                 case Op.CLASS:
-                    self._createClassSignature(instr)
-                    self._add2(f"struct {instr.args[0]}" + " {\n")
+                    self._add(f"typedef struct {instr.args[0]}" + " {\n")
                     self.indent_level +=1
                 case Op.CLASSMID:
                     self.indent_level -= 1
-                    self._add2("};\n")
-                case Op.TYPE2:
-                    self._addType(instr, "2")
-                case Op.EOL2:
-                    self._raw2(";")
-                case Op.VARLIST2:
-                    self._create_varlist(instr, 2)
+                    print
+                    self._add("} " + instr.args[0] + ";\n")
                 case Op.VARLIST:
-                    self._create_varlist(instr, 1)
+                    self._create_varlist(instr)
                 case Op.PARAMS:
                     self._addParam(instr)
                 case Op.ASSIGN:
-                    s = instr.args[0] + " = "
-                    self._raw2(s) if len(instr.args) > 1 and instr.args[1] == 1 else self._raw(s)
-                        
+                    self._raw(instr.args[0] + " = ")
                 case Op.INSTANCE:
                     struct = instr.args[0]
                     self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
@@ -132,7 +115,7 @@ class Emit:
                 case Op.THIS:
                     self._raw("this->")
                 case Op.TYPE:
-                    self._addType(instr, "1")
+                    self._addType(instr)
                 case Op.INDENT:
                     self._add("")
                 case Op.SIGNATURE:
@@ -147,28 +130,17 @@ class Emit:
                     self._add("} " + instr.args[0] + " {\n")
                 case Op.END:
                     self._add("}\n\n")
-                case Op.RPAREN:
-                    self._raw(")")
-                case Op.LPAREN:
-                    self._raw("(")
-                case Op.RCURL:
-                    self._raw("}")
-                case Op.LCURL:
-                    self._raw("{")
-                case Op.EOL:
-                    self._raw(";")
                 case Op.RET:
                     self._add("return ")
-                case Op.IDT_M:
+                case Op.IDTL_M:
                     self.indent_level -= 1
-                case Op.IDT_P:
+                case Op.IDTL_P:
                     self.indent_level += 1
                 case Op.COMMA:
                     if instr.args[0]:
                         self._raw(", ")
                 case Op.RAW:
-                    s = str(instr.args[0])
-                    self._raw2(s) if len(instr.args) > 1 and instr.args[1] == 1 else self._raw(s)
+                    self._raw(str(instr.args[0]))
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 
@@ -176,20 +148,13 @@ class Emit:
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
     # FIXME - WHAT EVEN THE FUCK IS THIS DUPLICATED CASES WHAT THE ACTUAL FUCKING SHIT IS THIS OMG I HATE IT SO MUCH FUCKING FIX THIS EXTREME PILE OF DOGSHIT
-    def _addType(self, instr, flag):
+    def _addType(self, instr):
         type = instr.args[0]
-        if flag == "1":
-            match type:
-                case "bool":
-                    self._add("int", "Were boolean variables in source code")
-                case _:
-                    self._add(type)
-        else:
-            match type:
-                case "bool":
-                    self._add2("int", "Were boolean variables in source code")
-                case _:
-                    self._add2(type)
+        match type:
+            case "bool":
+                self._add("int", "Was boolean variables in source code")
+            case _:
+                self._add(type)
 
     def _addParam(self, instr):
         s = instr.args[0] + " " + instr.args[1]
@@ -216,8 +181,8 @@ class Emit:
             current = current.next
         return s    
     
-    def _create_varlist(self, instr, flag):
+    def _create_varlist(self, instr):
         s = instr.args[0]
         if instr.args[1]:
             s += ","
-        self._raw(" " + s) if flag == 1 else self._raw2("" + s)
+        self._raw(" " + s)

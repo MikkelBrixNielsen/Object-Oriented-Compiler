@@ -70,7 +70,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t_rhs = self._get_type(t.rhs)
         if not t_lhs == t_rhs:
             cn = t.__class__.__name__
-            if cn == "expression_call" or cn == "expression_method" or cn == "expression_this_method":
+            if cn == "expression_call" or cn == "expression_method":
                 self._function_type_match_return_type(self._current_scope.lookup(t.rhs.name).info)
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
@@ -170,6 +170,34 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def midVisit_statement_while(self, t):
         self._is_boolean_convertable(t)
 
+
+
+
+
+
+
+
+    # TODO - ARRAY OUT OF BOUNDS TYPE CHECKING TO THE DEGREE IT IS POSSIBLE
+        #val = self._current_scope.lookup(t.identifier)
+        #if not val.cat == NameCategory.PARAMETER:
+        #    size_of_self = 0
+        #    current = val.info[-3]
+        #    while current:
+        #        current = current.next
+        #        size_of_self += 1
+        #if not val.cat == NameCategory.PARAMETER and isinstance(t.idx, int) and val.info[-2] <= t.idx:
+        #    error_message("Symbol Collection",
+        #                  f"Index out of bounds s[{t.idx}]: '{t.identifier}' has {val.info[-2]} elements",
+        #                  t.lineno)
+                
+                # THE THIGNS I THINK IT MIGHT BE POSSIBLE FOR
+                # expression integer 
+                # identifier
+                # expression_array_indexing
+                # expression_attribute
+                # binop when lhs and rhs is one of the above
+
+
     def preVisit_array_list(self, t):
         if not str(t.type[:-2]) == t.exp.type:
             error_message("Type Checking",
@@ -216,18 +244,34 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t.type = t.type[:-2]
 
     def postVisit_attributes_declaration_list(self, t):
-        print(t)
-        print(hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop" and not t.decl.exp.size.type == "int" )
+        #type = None
+        #if  hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop" and not t.decl.exp.size.type == "int":
+        #    type = self._get_type(t.decl.exp.size)
         
         # FIXME - if there is a variabl-sized paramter in the binop thrown an error 
                 # all expression involved in the binop should have a static value (known at compile time)
         # FIXME - Get the type of the binop 
-        type = self._get_type(t.decl.exp.size.type)
 
-        if hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop" and not type == "int":
-            error_message("Type Checking",
-                          "Cannot initialize array with non-integer value",
-                          t.decl.lineno)
+        if hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop":
+            type = self._get_type(t.decl.exp.size)
+            if not type == "int":
+                error_message("Type Checking",
+                              "Cannot initialize array with non-integer value",
+                              t.decl.lineno)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     # The auxiliaries
@@ -263,7 +307,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 error_message("Type Checking",
                               f"Cannot initialize array with an instance of a class.",
                               lineno)
-            case "expression_call" | "expression_method" | "expression_this_method" | "expression_identifier" | "expression_array_indexing" | "expression_this_attribute" | "expression_attribute":
+            case "expression_call" | "expression_method" | "expression_identifier" | "expression_array_indexing" | "expression_attribute":
                 if t.data:
                     error_message("Type Checking",
                                   f"Variable-sized object may not be initialized.",
@@ -274,7 +318,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 error_message("Type Checking",
                               f"_get_value does not support {cn}",
                               lineno)
-
 
     def is_integer(self, t):
         return self._get_type(t) == "int"
@@ -288,7 +331,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             is_convertable = True
         else:
             match t.exp.__class__.__name__:
-                case "expression_identifier" | "expression_attribute" | "expression_this_attribute" | "expression_method" | "expression_this_method":
+                case "expression_identifier" | "expression_attribute" | "expression_method":
                     is_convertable = t.exp.type in immediate_conversion
                     if not is_convertable:
                         is_convertable = not t.exp.type == None
@@ -386,32 +429,67 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"Instance {t.inst} not found.",
                           t.lineno)
         field = None
-        if t.inst == "this": # Looking only through class attributes / methods
-            elem = (t.field if cat == "attribute" else t.name, None, NameCategory.ATTRIBUTE if cat == "attribute" else NameCategory.FUNCTION)
-            field = self._current_scope.parent.lookup_this_scope(elem[0])
-            if field:
-                t.type = field.type
-                field = (elem[0], field.type, elem[2])
-            # DESIGN CHOICE this keyword can only be used for attributes defined in the specific class
-        else: # Finding class the attribute / method should be part of and checking for membership
+        desc = None
+        # Finding class the attribute / method should be part of and
+        if t.inst == "this": 
+            class_name = self._current_scope.lookup(NameCategory.THIS).cat
+            desc = self._current_scope.lookup(class_name)
+        else: 
             desc = self._current_scope.lookup(inst.type[:-1])
-            idx = 0 if cat == "attribute" else 1 # if not attribute then method
-            name = t.field if cat == "attribute" else t.name
-            while field == None:
-                for elem in desc.info[idx]:
-                    if elem[0] == name:
-                        field = (elem[0], elem[1], NameCategory.ATTRIBUTE if idx == 0 else NameCategory.FUNCTION)
-                        t.type = elem[1]
-                        break # stops searching when first match found
-                if field or len(desc.info[2]) == 0:
-                    break # if member found stop looking or no more extension to look through 
-                desc = self._current_scope.lookup(desc.info[2][0])
+        # checking for membership
+        idx = 0 if cat == "attribute" else 1 # if not attribute then method
+        name = t.field if cat == "attribute" else t.name
+        while field == None:
+            for elem in desc.info[idx]:
+                if elem[0] == name:
+                    field = (elem[0], elem[1], NameCategory.ATTRIBUTE if idx == 0 else NameCategory.FUNCTION)
+                    t.type = elem[1]
+                    break # stops searching when first match found
+            if field or len(desc.info[2]) == 0:
+                break # if member found stop looking or no more extension to look through 
+            desc = self._current_scope.lookup(desc.info[2][0])
         
         if not field:
             error_message("Type Checking",
                           f"Identifier '{t.field}' not found.",
                           t.lineno)
         return field
+    
+    # PREVIOUS VERSION OF THE ABOVE METHOD
+    #def _exist_membership(self, t, cat):
+    #    inst = self._current_scope.lookup(t.inst)
+    #    if not inst:
+    #        error_message("Type Checking", 
+    #                      f"Instance {t.inst} not found.",
+    #                      t.lineno)
+    #    field = None
+    #    desc = None
+    #    if t.inst == "this": # Looking only through class attributes / methods
+    #        elem = (t.field if cat == "attribute" else t.name, None, NameCategory.ATTRIBUTE if cat == "attribute" else NameCategory.FUNCTION)
+    #        field = self._current_scope.parent.lookup_this_scope(elem[0])
+    #        if field:
+    #            t.type = field.type
+    #            field = (elem[0], field.type, elem[2])
+    #    else: # Finding class the attribute / method should be part of and checking for membership
+    #        desc = self._current_scope.lookup(inst.type[:-1])
+    #    
+    #        idx = 0 if cat == "attribute" else 1 # if not attribute then method
+    #        name = t.field if cat == "attribute" else t.name
+    #        while field == None:
+    #            for elem in desc.info[idx]:
+    #                if elem[0] == name:
+    #                    field = (elem[0], elem[1], NameCategory.ATTRIBUTE if idx == 0 else NameCategory.FUNCTION)
+    #                    t.type = elem[1]
+    #                    break # stops searching when first match found
+    #            if field or len(desc.info[2]) == 0:
+    #                break # if member found stop looking or no more extension to look through 
+    #            desc = self._current_scope.lookup(desc.info[2][0])
+    #    
+    #    if not field:
+    #        error_message("Type Checking",
+    #                      f"Identifier '{t.field}' not found.",
+    #                      t.lineno)
+    #    return field
     
     def _find_member_in_tuple_list(self, m, tl):
         for member in tl:
