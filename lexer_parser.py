@@ -256,7 +256,7 @@ def p_attributes_declaration_list(t):
     '''attributes_declaration_list : TYPE attributes_list SEMICOL
                                    | TYPE attributes_list SEMICOL attributes_declaration_list
                                    | array_list SEMICOL
-                                   | array_list SEMICOL variables_declaration_list'''
+                                   | array_list SEMICOL attributes_declaration_list'''
     if len(t) == 3:
         t[0] = AST.attributes_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
     elif len(t) == 4:
@@ -375,27 +375,9 @@ def p_statement_while(t):
     'statement_while :  WHILE expression DO statement'
     t[0] = AST.statement_while(t[2], t[4], t.lexer.lineno)
 
-
-
-
-
-
-
-
-
-
-# FIXME NOT IMPLEMENTED
 def p_statement_compound(t):
     'statement_compound :  LCURL statement_list RCURL'
     t[0] = t[2]
-
-
-
-
-
-
-
-
 
 def p_optional_statement_list(t):
     '''optional_statement_list : empty
@@ -429,17 +411,11 @@ def p_expression(t):
 
 
 def p_expression_array_indexing(t):
-    'expression_array_indexing : IDENT LBRAC index RBRAC'
+    'expression_array_indexing : IDENT LBRAC expression RBRAC'
     t[0] = AST.expression_array_indexing(t[1], t[3], t.lexer.lineno)
 
-def p_index(t):
-    '''index : IDENT
-             | INT'''
-    t[0] = t[1]
-
-
 def p_expression_new_array(t):
-    'expression_new_array : NEW ARRAY LPAREN TYPE COMMA INT optional_data RPAREN'
+    'expression_new_array : NEW ARRAY LPAREN TYPE COMMA expression optional_data RPAREN'
     t[0] = AST.expression_new_array(t[4], t[6], t[7], t.lexer.lineno)
 
 def p_optional_data(t):

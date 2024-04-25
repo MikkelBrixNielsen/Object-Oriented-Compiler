@@ -1,8 +1,5 @@
 from dataclasses import dataclass, field
-
-
 from typing import Any
-
 
 @dataclass
 class global_body:
@@ -122,16 +119,6 @@ class parameter_list:
             self.next.accept(visitor)
         visitor.postVisit(self)
 
-
-
-
-
-
-
-
-
-
-
 @dataclass
 class class_declaration_list:
     decl: Any
@@ -234,7 +221,6 @@ class method:
         visitor.midVisit(self)
         self.body.accept(visitor)
         visitor.postVisit(self)
-
 
 @dataclass
 class expression_attribute:
@@ -353,7 +339,6 @@ class expression_integer:
     lineno: int
     type: Any = field(default="int")
 
-
     def accept(self, visitor):
         visitor.postVisit(self)
 
@@ -362,7 +347,6 @@ class expression_float:
     double: float
     lineno: int
     type: Any = field(default="float")
-
 
     def accept(self, visitor):
         visitor.postVisit(self)
@@ -385,7 +369,6 @@ class expression_char:
     def accept(self, visitor):
         visitor.postVisit(self)
 
-
 @dataclass
 class array_list:
     variable: Any
@@ -404,7 +387,6 @@ class array_list:
             self.next.accpet(visitor)
         visitor.postVisit(self)
 
-
 @dataclass
 class expression_new_array:
     type: Any
@@ -414,6 +396,8 @@ class expression_new_array:
 
     def accept(self, visitor):
         visitor.preVisit(self)
+        self.size.accept(visitor)
+        visitor.midVisit(self)
         if self.data:
             self.data.accept(visitor)
         visitor.postVisit(self)
@@ -421,11 +405,13 @@ class expression_new_array:
 @dataclass
 class expression_array_indexing:
     identifier: Any
-    idx: int
+    idx: Any
     lineno: int
     type: Any = field(default=None)
 
     def accept(self, visitor):
+        visitor.preVisit(self)
+        self.idx.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass
@@ -485,14 +471,11 @@ class expression_new_instance:
     lineno: int
     identifier: Any = field(default=None)
 
-    # FIXME - Probably need more than a post visit but idk ask someone smarter???
     def accept(self, visitor):
         visitor.preVisit(self)
         if self.params:
             self.params.accept(visitor)
         visitor.postVisit(self)
-
-
 
 @dataclass
 class instance_expression_list:
@@ -501,7 +484,6 @@ class instance_expression_list:
     lineno: int
     struct: Any = field(default=None)
     param: Any = field(default=None)
-
 
     def accept(self, visitor):
         visitor.preVisit(self)

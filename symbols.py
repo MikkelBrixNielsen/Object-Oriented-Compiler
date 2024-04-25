@@ -151,7 +151,6 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_variables_declaration_list(self, t):
         # Pass along its type to the variable declaration lists
-        #print(t)
         t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
@@ -215,6 +214,24 @@ class ASTSymbolVisitor(VisitorsBase):
         t.decl.type = t.type
         if t.next:
             t.next.name = t.name
+    
+    def postVisit_attributes_declaration_list(self, t):
+        if hasattr(t.decl, "exp"):
+            self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
+
+    def _check_size_is_static(self, t, lineno):
+        match t.__class__.__name__:
+            case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
+                pass
+            case "expression_float" | "expression_char":
+                error_message("Symbol Collection",
+                              "Non-integer types cannot be used to initialize the size of an array.",
+                              lineno)
+            case _:
+                error_message("Symbol Collection",
+                              "variable-sized parameters cannot be used to initialize arrays in classes.",
+                              lineno)
+
 
     def preVisit_attributes_list(self, t):
         if t.next:
@@ -243,11 +260,21 @@ class ASTSymbolVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_statement_assignment(self, t):
+        lhs = self._current_scope.lookup(t.lhs)
+        if not lhs:
+            error_message("Symbol Collection",
+                          f"Assignment before declaration of '{t.lhs}",
+                          t.lineno)
+        
+        
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs
         if t.rhs.__class__.__name__ == "expression_new_array":
-            lhs = self._current_scope.lookup(t.lhs)
-            lhs.size = t.rhs.size
+           if lhs.cat == NameCategory.ARRAY:
+                error_message("Symbol Collection",
+                              f"Cannot assign new array to already initialized array - perhaps use indexing to change each element.",
+                              t.rhs.lineno)
+           lhs.size = t.rhs.size
 
     def postVisit_statement_return(self, t):
         cn = t.exp.__class__.__name__
@@ -255,7 +282,8 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def _check_if_initialized(self, cn, t):
         if (not cn == "expression_integer" and not cn == "expression_float" and 
-            not cn == "expression_bool" and not cn == "expression_char"):
+            not cn == "expression_bool" and not cn == "expression_char" and
+            not cn == "expression_call" and not cn == "expression_method"):
             if cn == "expression_identifier":
                 val = self._current_scope.lookup_this_scope(t.identifier)
                 if val and not val.cat == NameCategory.PARAMETER:
@@ -278,7 +306,7 @@ class ASTSymbolVisitor(VisitorsBase):
                 val = self._current_scope.lookup_this_scope(ident)
             if not val:
                 error_message("Symbol Collection",
-                                f"Accessing variable before initialisation.",
+                                f"Accessing variable before initialization.",
                                 t.lineno)
 
     def _get_identifier(self, t):
@@ -335,7 +363,16 @@ class ASTSymbolVisitor(VisitorsBase):
                           f"Array access before declaration of '{t.identifier}'.",
                           t.lineno)
 
-        if not val.cat == NameCategory.PARAMETER and not isinstance(t.idx, str) and val.info[-2] <= t.idx:
+        # TODO - implement index out of bound checking for what is possible
+                # expression integer 
+                # identifier
+                # expression_array_indexing
+                # expression_this_attribute
+                # expression_attribute
+                # binop when lhs and rhs is one of the above
+
+
+        if not val.cat == NameCategory.PARAMETER and isinstance(t.idx, int) and val.info[-2] <= t.idx:
             error_message("Symbol Collection",
                           f"Index out of bounds s[{t.idx}]: '{t.identifier}' has {val.info[-2]} elements",
                           t.lineno)

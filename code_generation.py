@@ -293,23 +293,35 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
 
-    def preVisit_array_list(self, t):
-        s = " " + t.variable + "[" + str(t.exp.size) + "]"
-        flag = 0 if not t.name else 1
-        if t.exp.data:
-              self._app(Ins(Op.ASSIGN, s, flag))
-        else:
-            self._app(Ins(Op.RAW, s, flag))
 
-    def preVisit_expression_new_array(self, t):
+
+
+# FIXME - Code for generating arrays as part of structs is broken
+
+
+    def preVisit_array_list(self, t):
+        s = " " + t.variable + f"["
+        self._app(Ins(Op.RAW, s, 0 if not t.name else 1))
+        if t.name:
+            self._accept_array_exp(t)
+    
+    def _accept_array_exp(self, t):
+        self._app(Ins(Op.RAW, "]", 1))
+
+
+    def midVisit_expression_new_array(self, t):
         if t.data:
+            self._app(Ins(Op.ASSIGN, "]"))
+            
             self._app(Ins(Op.LCURL))
+        else:
+            self._app(Ins(Op.RAW, "]"))
 
     def postVisit_expression_new_array(self, t):
         if t.data:
             self._app(Ins(Op.RCURL))
-
-    def postVisit_expression_array_indexing(self, t):
+        
+    def preVisit_expression_array_indexing(self, t):
         val = self._current_scope.lookup(t.identifier)
         if not val.cat == NameCategory.PARAMETER:
             current_idx = 0
@@ -317,10 +329,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             while current:
                 current = current.next
                 current_idx += 1
+        self._app(Ins(Op.RAW, f"{t.identifier}["))
 
-        self._app(Ins(Op.RAW, f"{t.identifier}[{t.idx}]"))
+    def postVisit_expression_array_indexing(self, t):
+        self._app(Ins(Op.RAW, "]"))
 
-    # Design choice just return 0 if array index is not initialized or throw error?
+
+
+
+
+
+
+
 
 
 # auxies
