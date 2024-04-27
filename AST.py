@@ -306,6 +306,19 @@ class statement_while:
         visitor.postVisit(self)
 
 @dataclass
+class statement_call:
+    name: str
+    exp_list: Any
+    lineno: int
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        if self.exp_list:
+            self.exp_list.accept(visitor)
+        visitor.postVisit(self)
+
+
+@dataclass
 class statement_list:
     stm: Any
     next: Any
@@ -363,6 +376,17 @@ class expression_char:
     type: Any = field(default="char")
 
     def accept(self, visitor):
+        visitor.postVisit(self)
+
+@dataclass
+class expression_group:
+    exp: Any
+    lineno: int
+    type: Any = field(default=None)
+
+    def accept(self, visitor):
+        visitor.preVisit(self)
+        self.exp.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass

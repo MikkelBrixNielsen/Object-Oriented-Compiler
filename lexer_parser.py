@@ -346,7 +346,8 @@ def p_statement(t):
                  | statement_assignment
                  | statement_ifthenelse
                  | statement_while
-                 | statement_compound''' # Don't know what this is probably delete
+                 | statement_call
+                 | statement_compound'''
     t[0] = t[1]
 
 def p_statement_return(t):
@@ -364,7 +365,8 @@ def p_statement_assignment(t):
 def p_lhs(t):
     '''lhs : IDENT
            | THIS DOT IDENT
-           | IDENT DOT IDENT''' 
+           | IDENT DOT IDENT
+           | expression_array_indexing''' 
     if len(t) == 2:
         t[0] = t[1]
     else: 
@@ -381,6 +383,10 @@ def p_statement_while(t):
 def p_statement_compound(t):
     'statement_compound :  LCURL statement_list RCURL'
     t[0] = t[2]
+
+def p_statement_call(t):
+    'statement_call : IDENT LPAREN optional_expression_list RPAREN SEMICOL'
+    t[0] = AST.statement_call(t[1], t[3], t.lexer.lineno)
 
 def p_optional_statement_list(t):
     '''optional_statement_list : empty
@@ -409,9 +415,9 @@ def p_expression(t):
                   | expression_this_method
                   | expression_new_instance
                   | expression_new_array
-                  | expression_array_indexing'''
+                  | expression_array_indexing
+                  | expression_group'''
     t[0] = t[1]
-
 
 def p_expression_array_indexing(t):
     'expression_array_indexing : IDENT LBRAC expression RBRAC'
@@ -511,6 +517,10 @@ def p_expression_list(t):
         t[0] = AST.expression_list(t[1], None, t.lexer.lineno)
     else:
         t[0] = AST.expression_list(t[1], t[3], t.lexer.lineno)
+
+def p_expression_group(t):
+    'expression_group : LPAREN expression RPAREN'
+    t[0] = AST.expression_group(t[2], t.lexer.lineno)
 
 def p_error(t):
     try:

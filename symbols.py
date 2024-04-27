@@ -269,12 +269,17 @@ class ASTSymbolVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_statement_assignment(self, t):
-        lhs = self._current_scope.lookup(t.lhs)
+        cn = t.lhs.__class__.__name__
+        lhs = t.lhs
+        if cn == "expression_attribute":
+            lhs = t.lhs.inst
+        elif cn == "expression_array_indexing":
+           lhs = t.lhs.identifier
+        lhs = self._current_scope.lookup(lhs)
         if not lhs:
             error_message("Symbol Collection",
                           f"Assignment before declaration of '{t.lhs}",
                           t.lineno)
-        
         
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs

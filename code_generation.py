@@ -91,7 +91,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ASSIGN, lhs))
 
     def postVisit_statement_assignment(self, t):
-        self._app(Ins(Op.RAW, ";"))
+        if not t.rhs.__class__.__name__ == "expression_new_instance": # put a not infront of this
+            self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
         self._app(Ins(Op.RET))
@@ -108,7 +109,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_ifthenelse(self, t):
-        self._app(Ins(Op.START, "if"))
+        self._app(Ins(Op.START, "if "))
         self._app(Ins(Op.IDTL_P))
 
     def preMidVisit_statement_ifthenelse(self, t):
@@ -124,7 +125,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.END))
 
     def preVisit_statement_while(self, t):
-        self._app(Ins(Op.START, "while"))
+        self._app(Ins(Op.START, "while "))
         self._app(Ins(Op.IDTL_P))
 
     def midVisit_statement_while(self, t):
@@ -218,8 +219,23 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, ")"))
 
+    def preVisit_statement_call(self, t):
+        self._app(Ins(Op.INDENT))
+        self.preVisit_expression_call(t)
+
+    def postVisit_statement_call(self, t):
+        self.postVisit_expression_call(t)
+        self._app(Ins(Op.RAW , ";"))
+
+
     def midVisit_expression_list(self, t):
         self._app(Ins(Op.COMMA, t.next))
+
+    def preVisit_expression_group(self, t):
+        self._app(Ins(Op.RAW, "("))
+
+    def postVisit_expression_group(self, t):
+        self._app(Ins(Op.RAW, ")"))
 
     def midVisit_expression_binop(self, t):
         match t.op:
@@ -249,15 +265,35 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.INSTANCE, t.struct))
         self._extension_instance(t)
 
-
     def preVisit_instance_expression_list(self, t):
-        self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
-        # do something cool about assigning attributes to the newly created struct or smth idk ask steffen he might know
+        if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
+            val = self._current_scope.lookup(t.exp.identifier)
+            # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE 
+            self._app(Ins(Op.INDENT))
+            self._app(Ins(Op.RAW, "int i = 0;"))
+            self._app(Ins(Op.START, "while "))
+            self._app(Ins(Op.IDTL_P))
+            self._app(Ins(Op.RAW, f"i < {val.info[3].integer}"))
+            self._app(Ins(Op.PREMID))
+            self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param + "[i]"))
+        else:
+            self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
 
     def midVisit_instance_expression_list(self, t):
-        if t.next:
+        if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
+            self._app(Ins(Op.RAW, "[i]"))
             self._app(Ins(Op.RAW, ";"))
-    
+            # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE 
+            # but i should be the same 'i' as the one in the previsit of this same method above
+            self._app(Ins(Op.INDENT))
+            self._app(Ins(Op.RAW, "i = i + 1;"))
+            self._app(Ins(Op.IDTL_M))
+            self._app(Ins(Op.INDENT))
+            self._app(Ins(Op.RAW, "}"))
+            self._app(Ins(Op.RAW, "\n"))
+        else:
+            self._app(Ins(Op.RAW, ";"))
+
     def postVisit_expression_attribute(self, t):
         cd = None
         if t.inst == "this":
@@ -360,7 +396,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME Make it so code is generated for the extensions 
     # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
     # FIXME - Variables inherited should become a special version associated with a "virtual" instance of the extension e.g. Second has attr a, so in Third there will be a Second_a attr and for Seconds get_a Third will return Second_a
-    # or it might be possible to include na actual instance of Second in third and just use the methods already defined for second which are in the global scope already
+    # or it might be possible to include an actual instance of Second in third and just use the methods already defined for second which are in the global scope already
     def _extend_class(self, t):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists

@@ -49,10 +49,19 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_statement_assignment(self, t):
         lhs = None
         if t.lhs.__class__.__name__ == "expression_attribute":
-            lhs = self._exist_membership(t.lhs, "attribute")         
+            if t.lhs.type[-2:] == "[]":
+                error_message("Type Checking",
+                              f"Assignment to expression with array type", 
+                              t.lineno)
+            lhs = self._exist_membership(t.lhs, "attribute")
+        elif t.lhs.__class__.__name__ == "expression_array_indexing":
+            lhs = self._current_scope.lookup(t.lhs.identifier)
+            if lhs:
+                lhs = (t.lhs.identifier, lhs.type[:-2], lhs.cat)
         else: 
             lhs = self._current_scope.lookup(t.lhs)
-            lhs = (t.lhs, lhs.type, lhs.cat)
+            if lhs:
+                lhs = (t.lhs, lhs.type, lhs.cat)
         if not lhs:
             error_message("Type Checking",
                           f"Variable '{lhs[0]}' not found.",
@@ -68,13 +77,27 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         # check whether what is being assigned has the same type as what is being assigned to
         t_lhs = lhs[1]
         t_rhs = self._get_type(t.rhs)
-        if not t_lhs == t_rhs:
-            cn = t.__class__.__name__
-            if cn == "expression_call" or cn == "expression_method":
+        cnr = t.rhs.__class__.__name__
+
+        if not t_lhs == t_rhs and not (t_lhs == "int" and t_rhs == "float" or t_lhs == "float" and t_rhs == "int"):
+            if cnr == "expression_call" or cnr == "expression_method":
                 self._function_type_match_return_type(self._current_scope.lookup(t.rhs.name).info)
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
                           t.rhs.lineno)
+    
+    # after expression has been evaluated check if it can be evaluated to boolean 
+    def preMidVisit_statement_ifthenelse(self, t):
+        self._is_boolean_convertable(t)
+
+    def midVisit_statement_while(self, t):
+        self._is_boolean_convertable(t)
+
+    def preVisit_statement_call(self, t):
+        self.preVisit_expression_call(t)
+
+    def postVisit_expression_call(self, t):
+        self.postVisit_expression_call(t)
 
     def postVisit_expression_identifier(self, t):
         value = self._current_scope.lookup(t.identifier)
@@ -101,11 +124,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     def postVisit_expression_call(self, t):
         value = self._current_scope.lookup(t.name)
-        if not value:
-            error_message("Type Checking",
-                          f"Function '{t.name}' not found.",
-                          t.lineno)
-        elif value.cat != NameCategory.FUNCTION:
+        if value.cat != NameCategory.FUNCTION:
             error_message("Type Checking",
                           f"Identifier '{t.name}' is not a function.",
                           t.lineno)
@@ -163,15 +182,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.number_of_actual_parameters.pop()
 
-    # after expression has been evaluated check if it can be evaluated to boolean 
-    def preMidVisit_statement_ifthenelse(self, t):
-        self._is_boolean_convertable(t)
-
-    def midVisit_statement_while(self, t):
-        self._is_boolean_convertable(t)
-
-
-
+    def postVisit_expression_group(self, t):
+        t.type = t.exp.type
 
 
 
@@ -282,19 +294,13 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "expression_integer" | "expression_boolean":
                 return (True, tree.integer)
             case "expression_binop":
-
                 # FIXME - Traverse the binop and determine its effective type and the type of any functions etc.
-           
-           
                 if t.type == "int":
                     return (False, None)
                 else:
                     error_message("Type Checking",
                               f"Cannot initialize array with non-integer value.",
                               lineno)
-           
-
-            
             case "expression_char" | "expression_float":
                 error_message("Type Checking",
                               f"Cannot initialize array with non-integer value.",
@@ -344,6 +350,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 case "expression_binop":
                     type = self._get_effective_type(t.exp.lhs.type, t.exp.rhs.type, t.exp)
                     is_convertable = type in immediate_conversion
+                case "expression_group":
+                    is_convertable = t.exp.exp.type in immediate_conversion
                 case "expression_new_instance":
                     # Design choice "new" instantiations should not evaluate to anything boolean
                     is_convertable = False
@@ -395,7 +403,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
             case "expression_call":
                 return self._current_scope.lookup(t.name).type
-            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char" | "expression_new_array" | "expression_array_indexing":
+            case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char" | "expression_new_array" | "expression_array_indexing" | "expression_group":
                 return t.type
             case "expression_identifier":
                 return self._current_scope.lookup(t.identifier).type
