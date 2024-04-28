@@ -1,6 +1,7 @@
 from visitors_base import VisitorsBase
 from errors import error_message
 from symbols import NameCategory
+import AST
 
 class ASTTypeCheckingVisitor(VisitorsBase):
     def __init__(self):
@@ -85,6 +86,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Incorrect assignment: Assigning type {t_rhs} to type {t_lhs}",
                           t.rhs.lineno)
+        self._value_has_been_assigned(t)
     
     # after expression has been evaluated check if it can be evaluated to boolean 
     def preMidVisit_statement_ifthenelse(self, t):
@@ -145,8 +147,18 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         self.number_of_actual_parameters[-1] += 1
 
     def postVisit_expression_binop(self, t):
-        t.type = self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
-                
+        t_lhs = self._get_type(t.lhs)
+        t_rhs = self._get_type(t.rhs)
+        if (t_lhs != "int" and t_lhs != "float"):
+            error_message("Type Checking",
+                          f"Expression of type '{t_lhs}' not allowed in binop.",
+                          t.lineno)
+        if (t_rhs != "int" and t_rhs != "float"):
+            error_message("Type Checking",
+                          f"Expression of type '{t_rhs}' not allowed in binop.",
+                          t.lineno)
+        t.type = self._get_effective_type(t_lhs, t_rhs, t)
+                        
     def postVisit_expression_new_instance(self, t):
         value = self._current_scope.lookup(t.struct)
         if not value:
@@ -185,36 +197,15 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_group(self, t):
         t.type = t.exp.type
 
-
-
-
-
-    # TODO - ARRAY OUT OF BOUNDS TYPE CHECKING TO THE DEGREE IT IS POSSIBLE
-        #val = self._current_scope.lookup(t.identifier)
-        #if not val.cat == NameCategory.PARAMETER:
-        #    size_of_self = 0
-        #    current = val.info[-3]
-        #    while current:
-        #        current = current.next
-        #        size_of_self += 1
-        #if not val.cat == NameCategory.PARAMETER and isinstance(t.idx, int) and val.info[-2] <= t.idx:
-        #    error_message("Symbol Collection",
-        #                  f"Index out of bounds s[{t.idx}]: '{t.identifier}' has {val.info[-2]} elements",
-        #                  t.lineno)
-                
-                # THE THIGNS I THINK IT MIGHT BE POSSIBLE FOR
-                # expression integer 
-                # identifier
-                # expression_array_indexing
-                # expression_attribute
-                # binop when lhs and rhs is one of the above
-
-
     def preVisit_array_list(self, t):
         if not str(t.type[:-2]) == t.exp.type:
             error_message("Type Checking",
                           f"Type mismatch assigning array of type {t.exp.type} to array of type {t.type}.",
                           t.lineno)
+            
+    def postVisit_array_list(self, t):
+        val = self._current_scope.lookup(t.variable)
+        val.info[3] = AST.expression_integer(self._get_value_of_binop(val.info[3]), t.lineno)
 
     def preVisit_expression_new_array(self, t):
         self.number_of_actual_parameters.append(0)
@@ -224,23 +215,34 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Array size has to be an integer.",
                           t.lineno)
+        # checks the type of the expressions given as elements to the array match the array
         mismatched = False
+        unsupported_type = False
         current = t.data
         while current:
             if not current.exp.type == t.type:
                 mismatched = True
                 break
+            if current.exp.__class__.__name__ in ["expression_call", "expression_method",
+                                                       "expression_new_instance", "expression_new_array"]:
+                unsupported_type = True
+                break
             current = current.next
-        
         if mismatched:
             error_message("Type Checking",
-                          f"{current.exp.type} does not match the type of the array being {t.type}.",
+                          f"'{current.exp.type}' does not match the type of the array being '{t.type}'.",
                           t.lineno)
-        num_params = self.number_of_actual_parameters.pop()
-        needed =  self._get_value_if_any(t, t.lineno)
+        elif unsupported_type:
+            s = str(current.exp.__class__.__name__).replace("_", " ")
+            error_message("Type Checking",
+                          f"'{s}' cannot be put into arrays.",
+                          t.lineno)
+            
         # if there is an actual size to get this will be true and it will be compared
         # with num_params otherwise the size might be variable and first known at runtime 
         # which we cannot do much about
+        num_params = self.number_of_actual_parameters.pop()
+        needed =  self._get_value_if_any(t, t.lineno)
         if needed[0]: 
             if num_params > needed[1]:
                 error_message("Type Checking",
@@ -249,44 +251,101 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t.type = t.type + "[]"
 
     def postVisit_expression_array_indexing(self, t):
+        val = self._current_scope.lookup(t.identifier)
+        if not val.type[-2:] == "[]":
+            error_message("Type Checking", 
+                          f"cannot index into identifier '{t.identifier}' - It is not an array.",
+                          t.lineno)
         if not self.is_integer(t.idx):
             error_message("Type Checking",
                           f"Array index has to be an integer.",
                           t.lineno)
         t.type = t.type[:-2]
+        val = self._current_scope.lookup(t.identifier)
+        self._is_idx_oob(t.idx, val)
 
-    def postVisit_attributes_declaration_list(self, t):
-        #type = None
-        #if  hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop" and not t.decl.exp.size.type == "int":
-        #    type = self._get_type(t.decl.exp.size)
-        
-        # FIXME - if there is a variabl-sized paramter in the binop thrown an error 
-                # all expression involved in the binop should have a static value (known at compile time)
-        # FIXME - Get the type of the binop 
-
-        if hasattr(t.decl, "exp") and t.decl.exp.size.__class__.__name__ == "expression_binop":
-            type = self._get_type(t.decl.exp.size)
-            if not type == "int":
-                error_message("Type Checking",
-                              "Cannot initialize array with non-integer value",
-                              t.decl.lineno)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # TODO - 
+        # Evaluate binary expression and determine if its result is dependent on a function or other variable-sized expression
+        # if it is disallow it as size to array initialization
+        # FIXME - when initialzing an array ensure that the given size is greater or equal to the number of elemtns given
 
 
     # The auxiliaries
+    def _is_idx_oob(self, t, val):
+        cn = t.__class__.__name__
+        match cn:
+            case "expression_integer":
+                if t.integer >= self._get_value_of_binop(val.info[3] or t.integer < 0):
+                    error_message("Type Checking",
+                                  "Array index out of bounds.",
+                                  t.lineno)
+                return t.integer
+            case "expression_binop":
+                lhs = self._is_idx_oob(t.lhs, val)
+                rhs = self._is_idx_oob(t.rhs, val)
+                sum = rhs + lhs
+                if sum >= self._get_value_of_binop(val.info[3]) or sum < 0:
+                    error_message("Type Checking",
+                                  "Array index out of bounds.",
+                                  t.idx.lineno)
+                return lhs + rhs
+            case "expression_array_indexing":
+                idx = self._is_idx_oob(t.idx, self._current_scope.lookup(t.identifier))
+                if idx >= self._get_value_of_binop(val.info[3]) or idx < 0:
+                    error_message("Type Checking",
+                                  "Array index out of bounds.",
+                                  t.idx.lineno)
+                # find the integer value at idx in the array
+                i = 0
+                current = val.info[2]
+                while current and i < idx:
+                    current = current.next
+                    i = i + 1
+                if not current:
+                    error_message("Type Checking",
+                                  f"Accessing undeclared index '{i}' in {t.identifier}.",
+                                  t.lineno)
+                return current.exp.integer
+            case "expression_identifier":
+                # Value of identifier might not be known before runtime so just return 0
+                value = self._current_scope.lookup(t.identifier)
+                if not value:
+                    error_message("Type Checking",
+                                  f"Identifier '{t.identifier}' not found.",
+                                  t.lineno)
+                elif not value.assigned_value:
+                    error_message("Type Checking",
+                                  f"Undeclared '{t.identifier}' first use in function.",
+                                  t.lineno)
+                return 0
+            case "expression_attribute" | "expression_method":
+                # check if attribute exists
+                self._exist_membership(t, "method" if cn == "expression_method" else "attribute")
+                # Value of attribute might not be known before runtime so just return 0
+                return 0
+            case "expression_call":
+                # value returned by expression call may not be known before runtime so just return 0
+                value = self._current_scope.lookup(t.name)
+                if not value:
+                     error_message("Type Checking",
+                                  f"Identifier '{t.name}' not found.",
+                                  t.lineno)
+                return 0
+            case _:
+                error_message("Type Checking", 
+                              f"Index out of bounds check is not implemented for {t.__class__.__name__}",
+                              t.lineno)
+      
+    def _value_has_been_assigned(self, t):
+        lhs = t.lhs
+        if t.lhs.__class__.__name__ == "expression_attribute":
+            lhs = t.lhs.inst
+        elif t.lhs.__class__.__name__ == "expression_array_indexing":
+           lhs = t.lhs.identifier
+        lhs = self._current_scope.lookup(lhs)
+        lhs.assigned_value = t.rhs
+
+
     def _get_value_if_any(self, t, lineno):
         tree = t.size
         cn = tree.__class__.__name__
@@ -294,9 +353,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "expression_integer" | "expression_boolean":
                 return (True, tree.integer)
             case "expression_binop":
-                # FIXME - Traverse the binop and determine its effective type and the type of any functions etc.
                 if t.type == "int":
-                    return (False, None)
+                    value = self._get_value_of_binop(t.size)
+                    t.size = AST.expression_integer(value, t.lineno)
+                    return (True, value)
                 else:
                     error_message("Type Checking",
                               f"Cannot initialize array with non-integer value.",
@@ -316,7 +376,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "expression_call" | "expression_method" | "expression_identifier" | "expression_array_indexing" | "expression_attribute":
                 if t.data:
                     error_message("Type Checking",
-                                  f"Variable-sized object may not be initialized.",
+                                  f"Variable-sized object may not be used to initialize array.",
                                   lineno)
                 else:
                     return (False, None)
@@ -324,6 +384,34 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 error_message("Type Checking",
                               f"_get_value does not support {cn}",
                               lineno)
+
+    def _get_value_of_binop(self, t):
+        cn = t.__class__.__name__
+        match cn:
+            case "expression_integer":
+                return t.integer
+            case "expression_binop":
+                return self._get_value_of_binop(t.lhs) + self._get_value_of_binop(t.rhs)
+            case "expression_array_indexing":
+                info = self._current_scope.lookup(t.identifier)
+                idx = self._get_value_of_binop(t.idx)
+                # find the integer value at idx in the array
+                i = 0
+                current = info[2]
+                while i < idx:
+                    current = current.next
+                    i = i + 1
+                return current.exp.integer + idx
+            case "expression_identifier" | "expression_call" | "expression_attribute" | "expression_method":
+                error_message("Type Checking",
+                              f"Variable-sized object may not be used to initialize array",
+                              t.lineno)
+            case _:
+                error_message("Type Checking", 
+                              f"_approx_value_of_binop does not implemented {cn}",
+                              t.lineno)
+
+
 
     def is_integer(self, t):
         return self._get_type(t) == "int"
@@ -410,20 +498,18 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
 
-    # FIXME - figure out if it is needed to check which operation is performed
     def _get_effective_type(self, type1, type2, t):
+        if not type1 or not type2:
+            error_message("Type Checking",
+                          f"None type detected.",
+                          t.lineno)
         match t.op:
-            # These operators return a truth value which is represented as an integer
+            # Comparison operators return a truth value (represented as int)
             case "==" | "!=" | "<" | ">" | "<=" | ">=":
-                if type1 and type2:
-                    return "int"
-                else:
-                    error_message("Type Checking",
-                                  f"None type detected.",
-                                  t.lineno)
-                    
-            # FIXME Maybe check for None type here as well or just do it in general before the match IDK ask Steffen
-            case "/" | "*" | "+" | "-":
+                return "int"
+            case "/":
+                return "float"
+            case "*" | "+" | "-":
                 if type1 == "int" and type2 == "int":
                     return "int"
                 else: 
@@ -447,7 +533,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         # checking for membership
         idx = 0 if cat == "attribute" else 1 # if not attribute then method
         name = t.field if cat == "attribute" else t.name
-        while field == None:
+        while not field:
             for elem in desc.info[idx]:
                 if elem[0] == name:
                     field = (elem[0], elem[1], NameCategory.ATTRIBUTE if idx == 0 else NameCategory.FUNCTION)
@@ -456,7 +542,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             if field or len(desc.info[2]) == 0:
                 break # if member found stop looking or no more extension to look through 
             desc = self._current_scope.lookup(desc.info[2][0])
-        
         if not field:
             error_message("Type Checking",
                           f"Identifier '{t.field}' not found.",

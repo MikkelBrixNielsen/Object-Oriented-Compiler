@@ -2,7 +2,6 @@ from enum import Enum, auto
 from errors import error_message
 from visitors_base import VisitorsBase
 
-
 class NameCategory(Enum):
     """Categories for the names (symbols) collected and inserted into
        the symbol table.
@@ -25,12 +24,12 @@ class SymVal():
     """The information for a name (symbol) is its category together ith
        supplementary information.
     """
-    def __init__(self, cat, type, level, info):
+    def __init__(self, cat, type, level, info, assigned_value = None):
         self.cat = cat
         self.type = type
         self.level = level
         self.info = info
-
+        self.assigned_value = assigned_value
 
 class SymbolTable:
     def __init__(self, parent):
@@ -226,21 +225,8 @@ class ASTSymbolVisitor(VisitorsBase):
     
     def postVisit_attributes_declaration_list(self, t):
         if hasattr(t.decl, "exp"):
-            self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
-
-    def _check_size_is_static(self, t, lineno):
-        match t.__class__.__name__:
-            case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
-                pass
-            case "expression_float" | "expression_char":
-                error_message("Symbol Collection",
-                              "Non-integer types cannot be used to initialize the size of an array.",
-                              lineno)
-            case _:
-                error_message("Symbol Collection",
-                              "variable-sized parameters cannot be used to initialize arrays in classes.",
-                              lineno)
-
+            if hasattr(t.decl.exp, "size"):
+                self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
 
     def preVisit_attributes_list(self, t):
         if t.next:
@@ -289,18 +275,116 @@ class ASTSymbolVisitor(VisitorsBase):
                               f"Cannot assign new array to already initialized array - perhaps use indexing to change each element.",
                               t.rhs.lineno)
            lhs.size = t.rhs.size
-
+  
     def postVisit_statement_return(self, t):
         cn = t.exp.__class__.__name__
         self._check_if_initialized(cn, t.exp)
 
+    def preVisit_expression_new_instance(self, t):
+        t.symbol_table = self._current_scope # adds sym_table to instances
+        if t.params:
+            t.params.struct = t.identifier
+
+    # FIXME - Assigning type to parameters might need more complex logic to correctly identify the differet type of parameters there exit and giving them the correct type
+    def preVisit_instance_expression_list(self, t):
+        # Assigns the struct each expression relates to
+        if t.next:
+            t.next.struct = t.struct
+        # Assigns types to the parameters
+        if hasattr(t.exp, 'identifier'):
+            t.exp.type = self._current_scope.lookup(t.exp.identifier).type
+
+    def preVisit_array_list(self, t):
+        if t.name:
+            if t.exp.data:
+                error_message("Symbol Collection",
+                              f"Cannot initialize class array members directly at the point of declaration within the class definition.",
+                              t.lineno)
+            value = self._current_scope.lookup(t.name)
+            value.info[0].append((t.variable, t.type))
+        self._record_variables(t, NameCategory.ARRAY, t.exp.data, t.exp.size, t.name)
+
+    def postVisit_expression_array_indexing(self, t):
+        val = self._current_scope.lookup(t.identifier)
+        if not val:
+            error_message("Symobl Collection",
+                          f"Array access before declaration of '{t.identifier}'.",
+                          t.lineno)
+        t.type = val.type
+
+    def preVisit_expression_new_array(self, t):
+        cn = t.size.__class__.__name__
+        if cn == "expression_binop" and t.size.op in ["<", ">", "<=", ">=", "==", "!="]:
+            error_message("Symobl Collection",
+                          f"Array access using result of comparison not allowed.",
+                          t.lineno)
+        elif cn == "expression_char":
+             error_message("Symobl Collection",
+                          f"Array access using a character not allowed.",
+                          t.lineno)
+        elif cn == "expression_new_instance":
+             error_message("Symobl Collection",
+                          f"Array access using result of creating new instance not allowed.",
+                          t.lineno)
+        elif cn == "expression_new_array":
+             error_message("Symobl Collection",
+                          f"Array access using result of creating new array not allowed.",
+                          t.lineno)
+        elif t.type[-1:] == "*":
+             error_message("Symobl Collection",
+                          f"Array does not support user defiend type '{t.type[:-1]}'.",
+                          t.lineno)
+    # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
+    # TODO - Make new syntax work to create class instances 
+    # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
+
+# Auxiliaries
+    def _record_variables(self, t, *args): # maybe don't need to be *args
+        # AUX: Recording local variable names in the symbol table:
+        if self._current_scope.lookup_this_scope(t.variable):
+            error_message(
+                "Symbol Collection",
+                f"Redeclaration of '{t.variable}' in the same scope.",
+                t.lineno)
+ 
+        self._current_scope.insert(
+            t.variable, SymVal(args[0],
+                               t.type,
+                               self._current_level,
+                               [self.variable_offset] + [x for x in args]))
+        self.variable_offset += 1
+
+    # Extends class with appropriate methods and attributes 
+    # Maybe works as should maybe not IDK ask Steffen
+    def _extend(self, t, ext):
+        this = self._current_scope.lookup(t.name)
+        if not this:
+            error_message("Symbol Collection",
+                        f"class '{t.name}' not found.",
+                        t.lineno)
+        new_additions = []
+        for i in range(len(ext.info)):
+            for new_elem in ext.info[i]:
+                found = False
+                if i < 2: # Tuple comparison for attributes and methods
+                    for elem in this.info[i]:
+                        if new_elem[0] == elem[0]:
+                            found = True
+                            break # new_elem was found, so stop looking for it
+                else: # String comparision for extensions
+                    if new_elem in this.info[i]:
+                        found = True
+                if not found and i < 2: # Only adds attributes and methods to the list new_additions
+                        new_additions.append(new_elem)
+        this.info[3] += new_additions
+    
     def _check_if_initialized(self, cn, t):
         if (not cn == "expression_integer" and not cn == "expression_float" and 
             not cn == "expression_bool" and not cn == "expression_char" and
             not cn == "expression_call" and not cn == "expression_method"):
             if cn == "expression_identifier":
                 val = self._current_scope.lookup_this_scope(t.identifier)
-                if val and not val.cat == NameCategory.PARAMETER:
+                if val and not val.cat == NameCategory.PARAMETER and val.type not in ["int", "float", "bool", "char"]:
                     error_message("Symbol Collection",
                                   f"Returning local variable '{t.identifier}'.",
                                   t.lineno)
@@ -346,79 +430,16 @@ class ASTSymbolVisitor(VisitorsBase):
                 error_message("Symbol Collection",
                               f"_get_identifier does not implement {t.__class__.__name__}",
                               t.lineno)
-
-    def preVisit_expression_new_instance(self, t):
-        t.symbol_table = self._current_scope # adds sym_table to instances
-        if t.params:
-            t.params.struct = t.identifier
-
-    # FIXME - Assigning type to parameters might need more complex logic to correctly identify the differet type of parameters there exit and giving them the correct type
-    def preVisit_instance_expression_list(self, t):
-        # Assigns the struct each expression relates to
-        if t.next:
-            t.next.struct = t.struct
-        # Assigns types to the parameters
-        if hasattr(t.exp, 'identifier'):
-            t.exp.type = self._current_scope.lookup(t.exp.identifier).type
-
-    def preVisit_array_list(self, t):
-        if t.name:
-            if t.exp.data:
+                
+    def _check_size_is_static(self, t, lineno):
+        match t.__class__.__name__:
+            case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
+                pass
+            case "expression_float" | "expression_char":
                 error_message("Symbol Collection",
-                              f"Cannot initialize class array members directly at the point of declaration within the class definition.",
-                              t.lineno)
-            value = self._current_scope.lookup(t.name)
-            value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ARRAY, t.exp.data, t.exp.size, t.name)
-
-    def postVisit_expression_array_indexing(self, t):
-        val = self._current_scope.lookup(t.identifier)
-        if not val:
-            error_message("Symobl Collection",
-                          f"Array access before declaration of '{t.identifier}'.",
-                          t.lineno)
-        t.type = val.type
-
-    # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
-    # TODO - Make new syntax work to create class instances 
-    # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
-
-# Auxiliaries
-    def _record_variables(self, t, *args): # maybe don't need to be *args
-        # AUX: Recording local variable names in the symbol table:
-        if self._current_scope.lookup_this_scope(t.variable):
-            error_message(
-                "Symbol Collection",
-                f"Redeclaration of '{t.variable}' in the same scope.",
-                t.lineno)
- 
-        self._current_scope.insert(
-            t.variable, SymVal(args[0],
-                               t.type,
-                               self._current_level,
-                               [self.variable_offset] + [x for x in args]))
-        self.variable_offset += 1
-
-    # Extends class with appropriate methods and attributes 
-    # Maybe works as should maybe not IDK ask Steffen
-    def _extend(self, t, ext):
-        this = self._current_scope.lookup(t.name)
-        if not this:
-            error_message("Symbol Collection",
-                        f"class '{t.name}' not found.",
-                        t.lineno)
-        new_additions = []
-        for i in range(len(ext.info)):
-            for new_elem in ext.info[i]:
-                found = False
-                if i < 2: # Tuple comparison for attributes and methods
-                    for elem in this.info[i]:
-                        if new_elem[0] == elem[0]:
-                            found = True
-                            break # new_elem was found, so stop looking for it
-                else: # String comparision for extensions
-                    if new_elem in this.info[i]:
-                        found = True
-                if not found and i < 2: # Only adds attributes and methods to the list new_additions
-                        new_additions.append(new_elem)
-        this.info[3] += new_additions
+                              "Non-integer types cannot be used to initialize the size of an array.",
+                              lineno)
+            case _:
+                error_message("Symbol Collection",
+                              "variable-sized parameters cannot be used to initialize arrays in classes.",
+                              lineno)
