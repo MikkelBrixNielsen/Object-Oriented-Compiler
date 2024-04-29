@@ -347,6 +347,8 @@ def p_statement(t):
                  | statement_ifthenelse
                  | statement_while
                  | statement_call
+                 | statement_this_method
+                 | statement_method
                  | statement_compound'''
     t[0] = t[1]
 
@@ -387,6 +389,25 @@ def p_statement_compound(t):
 def p_statement_call(t):
     'statement_call : IDENT LPAREN optional_expression_list RPAREN SEMICOL'
     t[0] = AST.statement_call(t[1], t[3], t.lexer.lineno)
+
+
+
+# FIXME Be able to do instance access on a class and call a method
+# which might be a member of one of the instance variables 
+# and not the instance itself
+def p_statement_method(t):
+    '''statement_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN SEMICOL'''
+    # FIXME             | IDENT DOT statement_method'''
+    t[0] = AST.statement_method(t[1], t[3], t[5], t.lexer.lineno)
+
+def p_statement_this_method(t):
+    '''statement_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN SEMICOL'''
+    # FIXME                  | THIS DOT statement_method'''
+    t[0] = AST.statement_method(t[1], t[3], t[5], t.lexer.lineno)
+
+
+
+
 
 def p_optional_statement_list(t):
     '''optional_statement_list : empty
@@ -478,18 +499,23 @@ def p_expression_call(t):
 
 def p_expression_this_attribute(t):
     'expression_this_attribute : THIS DOT IDENT'
+    # FIXME                    | THIS DOT expression_attribute # to be able to do instance access on an already accessed instance variable aka attribute
+
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
 def p_expression_attribute(t):
     'expression_attribute : IDENT DOT IDENT'
+    # FIXME               | IDENT DOT expression_attribute # to be able to do instance access on an already accessed instance variable aka attribute
     t[0] = AST.expression_attribute(t[1], t[3], t.lexer.lineno)
 
 def p_expression_this_method(t):
     'expression_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'
+    # FIXME                 | IDENT DOT expression_method
     t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_expression_method(t):
     'expression_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'
+    # FIXME            | IDENT DOT expression_method
     t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_expression_binop(t):

@@ -95,11 +95,12 @@ class Emit:
             match instr.opcode:
                 case Op.CLASS:
                     self._createClassSignature(instr)
-                    self._add(f"typedef struct {instr.args[0]}" + " {\n")
+                    self._add(f"struct {instr.args[0]}" + " {\n")
                     self.indent_level +=1
                 case Op.CLASSMID:
                     self.indent_level -= 1
-                    self._add("} " + instr.args[0] + ";\n")
+                    self._add("};\n")
+                    #self._add("} " + instr.args[0] + ";\n")
                 case Op.VARLIST:
                     self._create_varlist(instr)
                 case Op.PARAMS:

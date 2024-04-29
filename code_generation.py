@@ -46,7 +46,7 @@ class Op(Enum):
     PRINT = auto()
     COMMA = auto()
     RAW = auto()
-    
+
     MEMCHECK = auto()
 
 class Ins:
@@ -228,6 +228,20 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_statement_call(self, t):
         self.postVisit_expression_call(t)
         self._app(Ins(Op.RAW , ";"))
+
+
+
+
+    def preVisit_statement_method(self, t):
+        self._app(Ins(Op.INDENT))
+        self.preVisit_expression_method(t)
+
+    def postVisit_statement_method(self, t):
+        self.postVisit_expression_method(t)
+        self._app(Ins(Op.RAW , ";"))
+        
+
+
 
 
     def midVisit_expression_list(self, t):
