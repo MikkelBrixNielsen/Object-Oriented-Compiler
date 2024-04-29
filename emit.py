@@ -25,7 +25,6 @@ _print_type = {
 }
 
 # Emitting
-
 class Emit:
     """The class that emits C code
     """
@@ -100,7 +99,6 @@ class Emit:
                     self.indent_level +=1
                 case Op.CLASSMID:
                     self.indent_level -= 1
-                    print
                     self._add("} " + instr.args[0] + ";\n")
                 case Op.VARLIST:
                     self._create_varlist(instr)
@@ -142,6 +140,12 @@ class Emit:
                         self._raw(", ")
                 case Op.RAW:
                     self._raw(str(instr.args[0]))
+                case Op.MEMCHECK:
+                    self._add(f"if ({instr.args[0]} == NULL)" + " {\n")
+                    self.indent_level += 1
+                    self._add("fprintf(stderr, \"Memory allocation failed.\");")
+                    self.indent_level -= 1
+                    self._add("}\n")
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 

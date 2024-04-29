@@ -388,7 +388,6 @@ class ASTSymbolVisitor(VisitorsBase):
                     error_message("Symbol Collection",
                                   f"Returning local variable '{t.identifier}'.",
                                   t.lineno)
-
             ident = self._get_identifier(t)
             val = None
             if cn == "expression_binop":
@@ -398,9 +397,9 @@ class ASTSymbolVisitor(VisitorsBase):
                 # there exists a value
                 val = True
             elif (cn == "expression_method" or cn == "expression_attribute"):
-                val = self._current_scope.parent.lookup_this_scope(ident)
-                if not val and t.inst == "this":
-                    val = True              
+                val = self._current_scope.lookup(t.inst)
+                if t.inst == "this":
+                    val = True
             else:
                 val = self._current_scope.lookup_this_scope(ident)
             if not val:

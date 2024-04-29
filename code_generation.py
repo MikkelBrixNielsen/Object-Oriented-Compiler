@@ -46,6 +46,8 @@ class Op(Enum):
     PRINT = auto()
     COMMA = auto()
     RAW = auto()
+    
+    MEMCHECK = auto()
 
 class Ins:
     """Representation of an instruction with an opcode, a number of
@@ -263,6 +265,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_expression_new_instance(self, t):
         self._current_scope = t.symbol_table
         self._app(Ins(Op.INSTANCE, t.struct))
+        self._app(Ins(Op.MEMCHECK, t.identifier))
         self._extension_instance(t)
 
     def preVisit_instance_expression_list(self, t):
