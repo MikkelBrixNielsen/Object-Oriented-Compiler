@@ -98,6 +98,9 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def preVisit_statement_call(self, t):
         self.preVisit_expression_call(t)
 
+    def postVisit_statement_call(self, t):
+        self.postVisit_expression_call(t)
+
     def postVisit_expression_call(self, t):
         self.postVisit_expression_call(t)
 
@@ -120,16 +123,15 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking", 
                           f"Function '{t.name}' not found.",
                           t.lineno)
-
+        if val.cat != NameCategory.FUNCTION:
+            error_message("Type Checking",
+                          f"Identifier '{t.name}' is not a function.",
+                          t.lineno)
         t.type = val.info.type
         self.number_of_actual_parameters.append(0)
 
     def postVisit_expression_call(self, t):
         value = self._current_scope.lookup(t.name)
-        if value.cat != NameCategory.FUNCTION:
-            error_message("Type Checking",
-                          f"Identifier '{t.name}' is not a function.",
-                          t.lineno)
         node = value.info
         if self.number_of_actual_parameters[-1] < node.number_of_parameters:
             error_message("Type Checking",
@@ -140,8 +142,25 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"'{t.name}' was called with too many parameters.",
                           t.lineno)
         self.number_of_actual_parameters.pop()
+        self._check_params_match_function(t)
         # FIXME - Check parameter types actually match what is needed compared to what was given :))
         # This is implemented for class constructors so maybe that can be used here as well 
+
+    def _check_params_match_function(self, t):
+        print(t)
+        par_list = self._current_scope.lookup(t.name).info.par_list
+        exp_list = t.exp_list
+        mismatched = False
+        while par_list and exp_list:
+            if par_list.type != exp_list.exp.type:
+                mismatched = True
+                break
+            par_list = par_list.next
+            exp_list = exp_list.next
+        if mismatched:
+            error_message("Type Checking",
+                          f"Given type '{exp_list.exp.type}' does not match '{par_list.type}'",
+                          t.lineno)
 
     def midVisit_expression_list(self, t):
         self.number_of_actual_parameters[-1] += 1
