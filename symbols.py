@@ -295,10 +295,11 @@ class ASTSymbolVisitor(VisitorsBase):
             t.exp.type = self._current_scope.lookup(t.exp.identifier).type
 
     def preVisit_array_list(self, t):
-        if t.name:
+        if t.name: # the array is an attribute on a class if it has a name
+            # you are not allowed to assign defualt values to arrays that are attributes on some class
             #if t.exp.data:
             #    error_message("Symbol Collection",
-            #                  f"Cannot initialize class array members directly at the point of declaration within the class definition.",
+            #                  f"Class attributes do not support direct assignment at the point of declaration within the class definition.",
             #                  t.lineno)
             value = self._current_scope.lookup(t.name)
             value.info[0].append((t.variable, t.type))

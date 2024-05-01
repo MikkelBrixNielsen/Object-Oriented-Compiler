@@ -267,10 +267,10 @@ def p_optional_attributes_declaration_list(t):
     t[0] = t[1]
 
 def p_attributes_declaration_list(t):
-    '''attributes_declaration_list : TYPE attributes_list SEMICOL
-                                   | TYPE attributes_list SEMICOL attributes_declaration_list
-                                   | array_list SEMICOL
-                                   | array_list SEMICOL attributes_declaration_list'''
+    '''attributes_declaration_list : FT attributes_list SEMICOL
+                                   | FT attributes_list SEMICOL attributes_declaration_list'''
+                                   #| array_list SEMICOL
+                                   #| array_list SEMICOL attributes_declaration_list'''
     if len(t) == 3:
         t[0] = AST.attributes_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
     elif len(t) == 4:

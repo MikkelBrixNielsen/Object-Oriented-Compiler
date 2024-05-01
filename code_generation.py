@@ -177,15 +177,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_attributes_declaration_list(self, t):
-        if t.decl.__class__.__name__ == "array_list":
-            t.type = t.type[:-2]
-        self._app(Ins(Op.TYPE, t.type))
+        temp = t.type
+        #if t.decl.__class__.__name__ == "array_list":
+        if t.decl.type[-2:] == "[]":
+            temp = str(t.type).replace("[]", "*")
+        self._app(Ins(Op.TYPE, temp))
 
     def midVisit_attributes_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST, " " + t.variable, t.next))
+        self._app(Ins(Op.VARLIST, t.variable, t.next))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier))
@@ -285,33 +287,33 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._extension_instance(t)
 
     def preVisit_instance_expression_list(self, t):
-        if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
-            val = self._current_scope.lookup(t.exp.identifier)
-            # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE 
-            self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, "int i = 0;"))
-            self._app(Ins(Op.START, "while "))
-            self._app(Ins(Op.IDTL_P))
-            self._app(Ins(Op.RAW, f"i < {val.info[3].integer}"))
-            self._app(Ins(Op.PREMID))
-            self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param + "[i]"))
-        else:
-            self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
+        #if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
+            #val = self._current_scope.lookup(t.exp.identifier)
+            # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE (THIS COULD JUsT BE A FOR LOOP)
+            #self._app(Ins(Op.INDENT))
+            #elf._app(Ins(Op.RAW, "int i = 0;"))
+            #self._app(Ins(Op.START, "while "))
+            #self._app(Ins(Op.IDTL_P))
+            #self._app(Ins(Op.RAW, f"i < {val.info[3].integer}"))
+            #self._app(Ins(Op.PREMID))
+            #self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param + "[i]"))
+        #else:
+        self._app(Ins(Op.ATTRASSIGN, t.struct, t.next, t.param))
 
     def midVisit_instance_expression_list(self, t):
-        if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
-            self._app(Ins(Op.RAW, "[i]"))
-            self._app(Ins(Op.RAW, ";"))
-            # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE 
-            # but i should be the same 'i' as the one in the previsit of this same method above
-            self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, "i = i + 1;"))
-            self._app(Ins(Op.IDTL_M))
-            self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, "}"))
-            self._app(Ins(Op.RAW, "\n"))
-        else:
-            self._app(Ins(Op.RAW, ";"))
+        #if (t.exp.__class__.__name__ == "expression_identifier" and t.exp.type[-2:] == "[]"):
+        #    self._app(Ins(Op.RAW, "[i]"))
+        #    self._app(Ins(Op.RAW, ";"))
+        #    # FIXME - 'i' SHOULD HAVE A RUNNING NUMBER OR SOMETHING THAT WILL MAKE IT UNIQUE (This could just continue the for loop so i would be the local i in the for loop)
+        #    # but i should be the same 'i' as the one in the previsit of this same method above
+        #    self._app(Ins(Op.INDENT))
+        #    self._app(Ins(Op.RAW, "i = i + 1;"))
+        #    self._app(Ins(Op.IDTL_M))
+        #    self._app(Ins(Op.INDENT))
+        #    self._app(Ins(Op.RAW, "}"))
+        #    self._app(Ins(Op.RAW, "\n"))
+        #else:
+        self._app(Ins(Op.RAW, ";"))
 
     def postVisit_expression_attribute(self, t):
         cd = None
@@ -342,9 +344,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_call(t)
 
     def preVisit_array_list(self, t):
-        s = " " + t.variable # + "["
-        self._app(Ins(Op.ASSIGN, s))
+        s = " " + t.variable
         temp = str(t.type).replace("[]", "*")
+        self._app(Ins(Op.ASSIGN, s))
         self._app(Ins(Op.RAW, f"({temp})malloc(("))
 
     def midVisit_expression_new_array(self, t):

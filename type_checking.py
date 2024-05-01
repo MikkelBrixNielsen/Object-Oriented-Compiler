@@ -50,10 +50,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_statement_assignment(self, t):
         lhs = None
         if t.lhs.__class__.__name__ == "expression_attribute":
-            if t.lhs.type[-2:] == "[]":
-                error_message("Type Checking",
-                              f"Assignment to expression with array type", 
-                              t.lineno)
+            #if t.lhs.type[-2:] == "[]":
+            #    error_message("Type Checking",
+            #                  f"Assignment to expression with array type", 
+            #                  t.lineno)
             lhs = self._exist_membership(t.lhs, "attribute")
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
             lhs = self._current_scope.lookup(t.lhs.identifier)

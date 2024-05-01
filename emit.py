@@ -139,10 +139,7 @@ class Emit:
                 case Op.RAW:
                     self._raw(str(instr.args[0]))
                 case Op.ALLOC:
-                    if len(instr.args) == 2:
-                        self._raw(f"({instr.args[0]})malloc(sizeof({instr.args[1]}));")
-                    else: 
-                        self._raw(f"({instr.args[0]})malloc({instr.args[2]}*sizeof({instr.args[1]}));")
+                    self._raw(f"({instr.args[0]})malloc(sizeof({instr.args[1]}));")
                 case Op.MEMCHECK:
                     self._add(f"if ({instr.args[0]} == NULL)" + " {\n")
                     self.indent_level += 1
