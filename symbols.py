@@ -230,7 +230,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_attributes_list(self, t):
         if t.next:
-            t.next.name = t.name
+            t.next.name = t.name 
             t.next.type = t.type
 
         value = self._current_scope.lookup(t.name)
@@ -296,13 +296,13 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_array_list(self, t):
         if t.name:
-            if t.exp.data:
-                error_message("Symbol Collection",
-                              f"Cannot initialize class array members directly at the point of declaration within the class definition.",
-                              t.lineno)
+            #if t.exp.data:
+            #    error_message("Symbol Collection",
+            #                  f"Cannot initialize class array members directly at the point of declaration within the class definition.",
+            #                  t.lineno)
             value = self._current_scope.lookup(t.name)
             value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ARRAY, t.exp.data, t.exp.size, t.name)
+        self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
 
     def postVisit_expression_array_indexing(self, t):
         val = self._current_scope.lookup(t.identifier)

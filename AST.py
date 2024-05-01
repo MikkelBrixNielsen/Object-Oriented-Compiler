@@ -424,15 +424,15 @@ class array_list:
 class expression_new_array:
     type: Any
     size: Any
-    data: Any
+    #data: Any
     lineno: int
 
     def accept(self, visitor):
         visitor.preVisit(self)
         self.size.accept(visitor)
         visitor.midVisit(self)
-        if self.data:
-            self.data.accept(visitor)
+        #if self.data:
+            #self.data.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass

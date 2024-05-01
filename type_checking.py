@@ -58,11 +58,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
             lhs = self._current_scope.lookup(t.lhs.identifier)
             if lhs:
-                lhs = (t.lhs.identifier, lhs.type[:-2], lhs.cat)
+                lhs = [t.lhs.identifier, lhs.type[:-2], lhs.cat]
         else: 
             lhs = self._current_scope.lookup(t.lhs)
             if lhs:
-                lhs = (t.lhs, lhs.type, lhs.cat)
+                lhs = [t.lhs, lhs.type, lhs.cat]
         if not lhs:
             error_message("Type Checking",
                           f"Variable '{lhs[0]}' not found.",
@@ -214,7 +214,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             
     def postVisit_array_list(self, t):
         val = self._current_scope.lookup(t.variable)
-        val.info[3] = AST.expression_integer(self._get_value_of_binop(val.info[3]), t.lineno)
+        val.info[-2] = AST.expression_integer(self._get_value_of_binop(val.info[-2]), t.lineno)
 
     def preVisit_expression_new_array(self, t):
         self.number_of_actual_parameters.append(0)
@@ -224,34 +224,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Array size has to be an integer.",
                           t.lineno)
-        # checks the type of the expressions given as elements to the array match the array
-        mismatched = False
-        unsupported_type = False
-        current = t.data
-        while current:
-            if not current.exp.type == t.type:
-                mismatched = True
-                break
-            if current.exp.__class__.__name__ in ["expression_call", "expression_method",
-                                                       "expression_new_instance", "expression_new_array"]:
-                unsupported_type = True
-                break
-            current = current.next
-        if mismatched:
-            error_message("Type Checking",
-                          f"'{current.exp.type}' does not match the type of the array being '{t.type}'.",
-                          t.lineno)
-        elif unsupported_type:
-            s = str(current.exp.__class__.__name__).replace("_", " ")
-            error_message("Type Checking",
-                          f"'{s}' cannot be put into arrays.",
-                          t.lineno)
-            
+        #self._check_array_elements_match_type(t)
+        num_params = self.number_of_actual_parameters.pop()
+        needed =  self._get_value_if_any(t, t.lineno)
         # if there is an actual size to get this will be true and it will be compared
         # with num_params otherwise the size might be variable and first known at runtime 
         # which we cannot do much about
-        num_params = self.number_of_actual_parameters.pop()
-        needed =  self._get_value_if_any(t, t.lineno)
         if needed[0]: 
             if num_params > needed[1]:
                 error_message("Type Checking",
@@ -280,11 +258,35 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
 
     # The auxiliaries
+    def _check_array_elements_match_type(self, t):
+        # checks the type of the expressions given as elements to the array match the array
+        mismatched = False
+        unsupported_type = False
+        current = t.data
+        while current:
+            if not current.exp.type == t.type:
+                mismatched = True
+                break
+            if current.exp.__class__.__name__ in ["expression_call", "expression_method",
+                                                       "expression_new_instance", "expression_new_array"]:
+                unsupported_type = True
+                break
+            current = current.next
+        if mismatched:
+            error_message("Type Checking",
+                          f"'{current.exp.type}' does not match the type of the array being '{t.type}'.",
+                          t.lineno)
+        elif unsupported_type:
+            s = str(current.exp.__class__.__name__).replace("_", " ")
+            error_message("Type Checking",
+                          f"'{s}' cannot be put into arrays.",
+                          t.lineno)
+
     def _is_idx_oob(self, t, val):
         cn = t.__class__.__name__
         match cn:
             case "expression_integer":
-                if t.integer >= self._get_value_of_binop(val.info[3] or t.integer < 0):
+                if t.integer >= self._get_value_of_binop(val.info[-2] or t.integer < 0):
                     error_message("Type Checking",
                                   "Array index out of bounds.",
                                   t.lineno)
@@ -293,14 +295,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 lhs = self._is_idx_oob(t.lhs, val)
                 rhs = self._is_idx_oob(t.rhs, val)
                 sum = rhs + lhs
-                if sum >= self._get_value_of_binop(val.info[3]) or sum < 0:
+                if sum >= self._get_value_of_binop(val.info[-2]) or sum < 0:
                     error_message("Type Checking",
                                   "Array index out of bounds.",
                                   t.idx.lineno)
                 return lhs + rhs
             case "expression_array_indexing":
                 idx = self._is_idx_oob(t.idx, self._current_scope.lookup(t.identifier))
-                if idx >= self._get_value_of_binop(val.info[3]) or idx < 0:
+                if idx >= self._get_value_of_binop(val.info[-2]) or idx < 0:
                     error_message("Type Checking",
                                   "Array index out of bounds.",
                                   t.idx.lineno)
@@ -383,12 +385,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                               f"Cannot initialize array with an instance of a class.",
                               lineno)
             case "expression_call" | "expression_method" | "expression_identifier" | "expression_array_indexing" | "expression_attribute":
-                if t.data:
-                    error_message("Type Checking",
-                                  f"Variable-sized object may not be used to initialize array.",
-                                  lineno)
-                else:
-                    return (False, None)
+                #if t.data:
+                #    error_message("Type Checking",
+                #                  f"Variable-sized object may not be used to initialize array.",
+                #                  lineno)
+                #else:
+                return (False, None)
             case _:
                 error_message("Type Checking",
                               f"_get_value does not support {cn}",
@@ -402,15 +404,16 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "expression_binop":
                 return self._get_value_of_binop(t.lhs) + self._get_value_of_binop(t.rhs)
             case "expression_array_indexing":
-                info = self._current_scope.lookup(t.identifier)
                 idx = self._get_value_of_binop(t.idx)
-                # find the integer value at idx in the array
-                i = 0
-                current = info[2]
-                while i < idx:
-                    current = current.next
-                    i = i + 1
-                return current.exp.integer + idx
+                #info = self._current_scope.lookup(t.identifier)
+                # find the integer value at idx in the array 
+                #i = 0                   # Commented out due to data being commented out
+                #current = info[2]
+                #while i < idx:
+                #    current = current.next
+                #    i = i + 1
+                #return current.exp.integer + idx
+                return idx
             case "expression_identifier" | "expression_call" | "expression_attribute" | "expression_method":
                 error_message("Type Checking",
                               f"Variable-sized object may not be used to initialize array",
@@ -634,12 +637,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 break
             par_list = par_list.next
             exp_list = exp_list.next
-
-        if par_list and not exp_list:
+        if not par_list and exp_list:
             return (True, None, exp_list.exp.type)
         elif par_list and not exp_list:
             return (True, par_list.type, None)
-        elif not (par_list and exp_list):
+        elif not par_list and not exp_list:
             return (False, None, None)
         else:
             return (mismatched, self._get_type(par_list), self._get_type(exp_list.exp))

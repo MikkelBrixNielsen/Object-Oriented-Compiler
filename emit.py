@@ -107,9 +107,6 @@ class Emit:
                     self._addParam(instr)
                 case Op.ASSIGN:
                     self._raw(instr.args[0] + " = ")
-                case Op.INSTANCE:
-                    struct = instr.args[0]
-                    self._raw(f"({struct}*)" + f"malloc(sizeof({struct}));")
                 case Op.ATTRASSIGN:
                     self._add(f"{instr.args[0]}->{instr.args[2]} = ")
                 case Op.THIS:
@@ -141,6 +138,11 @@ class Emit:
                         self._raw(", ")
                 case Op.RAW:
                     self._raw(str(instr.args[0]))
+                case Op.ALLOC:
+                    if len(instr.args) == 2:
+                        self._raw(f"({instr.args[0]})malloc(sizeof({instr.args[1]}));")
+                    else: 
+                        self._raw(f"({instr.args[0]})malloc({instr.args[2]}*sizeof({instr.args[1]}));")
                 case Op.MEMCHECK:
                     self._add(f"if ({instr.args[0]} == NULL)" + " {\n")
                     self.indent_level += 1

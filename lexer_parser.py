@@ -201,9 +201,19 @@ def p_instance_of(t):
     '''instance_of : INSTANCEOF LPAREN IDENT RPAREN'''
     t[0] = t[3] + "*"
 
+
+# FIXME - Maybe limit this to at most be [][] indicating arrays in arrays 
 def p_array(t):
-    '''array : TYPE LBRAC RBRAC'''
-    t[0] = t[1] + "[]"
+    '''array : TYPE ARR'''
+    t[0] = t[1] + t[2]
+
+def p_ARR(t):
+    '''ARR : LBRAC RBRAC
+           | LBRAC RBRAC ARR'''
+    if len(t) == 3:
+        t[0] = "[]"
+    else:
+        t[0] = "[]" + t[3]
 
 def p_array_list(t):
     '''array_list : array IDENT ASSIGN expression_new_array
@@ -341,27 +351,27 @@ def p_parameter_list(t):
         t[0] = AST.parameter_list(t[1], t[2], t[4], t.lexer.lineno)
 
 def p_statement(t):
-    '''statement : statement_return
-                 | statement_print
-                 | statement_assignment
+    '''statement : statement_return SEMICOL
+                 | statement_print SEMICOL
+                 | statement_assignment SEMICOL
                  | statement_ifthenelse
                  | statement_while
-                 | statement_call
-                 | statement_this_method
-                 | statement_method
+                 | statement_call SEMICOL
+                 | statement_this_method SEMICOL
+                 | statement_method SEMICOL
                  | statement_compound'''
     t[0] = t[1]
 
 def p_statement_return(t):
-    'statement_return : RETURN expression SEMICOL'
+    'statement_return : RETURN expression'
     t[0] = AST.statement_return(t[2], t.lexer.lineno)
 
 def p_statement_print(t):
-    'statement_print : PRINT LPAREN expression RPAREN SEMICOL'
+    'statement_print : PRINT LPAREN expression RPAREN'
     t[0] = AST.statement_print(t[3], t.lexer.lineno)
 
 def p_statement_assignment(t):
-    'statement_assignment : lhs ASSIGN expression SEMICOL'
+    'statement_assignment : lhs ASSIGN expression'
     t[0] = AST.statement_assignment(t[1], t[3], t.lexer.lineno)
 
 def p_lhs(t):
@@ -387,7 +397,7 @@ def p_statement_compound(t):
     t[0] = t[2]
 
 def p_statement_call(t):
-    'statement_call : IDENT LPAREN optional_expression_list RPAREN SEMICOL'
+    'statement_call : IDENT LPAREN optional_expression_list RPAREN'
     t[0] = AST.statement_call(t[1], t[3], t.lexer.lineno)
 
 
@@ -396,12 +406,12 @@ def p_statement_call(t):
 # which might be a member of one of the instance variables 
 # and not the instance itself
 def p_statement_method(t):
-    '''statement_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN SEMICOL'''
+    '''statement_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'''
     # FIXME             | IDENT DOT statement_method'''
     t[0] = AST.statement_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_statement_this_method(t):
-    '''statement_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN SEMICOL'''
+    '''statement_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'''
     # FIXME                  | THIS DOT statement_method'''
     t[0] = AST.statement_method(t[1], t[3], t[5], t.lexer.lineno)
 
@@ -445,16 +455,16 @@ def p_expression_array_indexing(t):
     t[0] = AST.expression_array_indexing(t[1], t[3], t.lexer.lineno)
 
 def p_expression_new_array(t):
-    'expression_new_array : NEW ARRAY LPAREN TYPE COMMA expression optional_data RPAREN'
-    t[0] = AST.expression_new_array(t[4], t[6], t[7], t.lexer.lineno)
+    'expression_new_array : NEW ARRAY LPAREN FT COMMA expression RPAREN' #optional_data RPAREN'
+    t[0] = AST.expression_new_array(t[4], t[6], t.lexer.lineno) #t[7], t.lexer.lineno)
 
-def p_optional_data(t):
-    '''optional_data : empty
-                     | COMMA LBRAC expression_list RBRAC'''
-    if len(t) == 2:
-        t[0] = t[1]
-    else:
-        t[0] = t[3]
+#def p_optional_data(t):
+#    '''optional_data : empty
+#                     | COMMA LBRAC expression_list RBRAC'''
+#    if len(t) == 2:
+#        t[0] = t[1]
+#    else:
+#        t[0] = t[3]
     
 def p_expression_new_instance(t):
     'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN'

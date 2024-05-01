@@ -30,7 +30,6 @@ class Op(Enum):
     CLASS = auto()
     CLASSMID = auto()
     THIS = auto()
-    INSTANCE = auto()
     ATTRASSIGN = auto()
 
     VARLIST = auto()
@@ -47,6 +46,7 @@ class Op(Enum):
     COMMA = auto()
     RAW = auto()
 
+    ALLOC = auto
     MEMCHECK = auto()
 
 class Ins:
@@ -73,11 +73,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_variables_declaration_list(self, t):
         if t.decl.__class__.__name__ == "array_list":
-            t.type = t.type[:-2]
+            t.type = str(t.type).replace("[]", "*")
         self._app(Ins(Op.TYPE, t.type))
 
     def midVisit_variables_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
+        if t.decl.__class__.__name__ == "array_list":
+            self._app(Ins(Op.MEMCHECK, t.decl.variable))
 
     def preVisit_variables_list(self, t):
         self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
@@ -278,7 +280,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_expression_new_instance(self, t):
         self._current_scope = t.symbol_table
-        self._app(Ins(Op.INSTANCE, t.struct))
+        self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
         self._app(Ins(Op.MEMCHECK, t.identifier))
         self._extension_instance(t)
 
@@ -340,19 +342,24 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_call(t)
 
     def preVisit_array_list(self, t):
-        s = " " + t.variable + f"["
-        self._app(Ins(Op.RAW, s))
-  
-    def midVisit_expression_new_array(self, t):
-        if t.data:
-            self._app(Ins(Op.ASSIGN, "]"))
-            self._app(Ins(Op.RAW, "{"))
-        else:
-            self._app(Ins(Op.RAW, "]"))
+        s = " " + t.variable # + "["
+        self._app(Ins(Op.ASSIGN, s))
+        temp = str(t.type).replace("[]", "*")
+        self._app(Ins(Op.RAW, f"({temp})malloc(("))
 
-    def postVisit_expression_new_array(self, t):
-        if t.data:
-            self._app(Ins(Op.RAW, "}"))
+    def midVisit_expression_new_array(self, t):
+        #if t.data:
+            #self._app(Ins(Op.ASSIGN, "]"))
+            #self._app(Ins(Op.RAW, "{"))
+        #else:
+        #self._app(Ins(Op.RAW, "]"))
+        temp = str(t.type).replace("[]", "*")[:-1]
+        self._app(Ins(Op.RAW, f")*sizeof({temp}))"))
+
+    #def postVisit_expression_new_array(self, t):
+        #if t.data:
+            #self._app(Ins(Op.RAW, "}"))
+    #    pass
         
     def preVisit_expression_array_indexing(self, t):
         self._app(Ins(Op.RAW, f"{t.identifier}["))
@@ -369,8 +376,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             temp = cd.info[2][0].lower()
             self._app(Ins(Op.TYPE, cd.info[2][0] + "*"))
             self._app(Ins(Op.VARLIST, temp, None))
-            self._app(Ins(Op.RAW, " = "))            
-            self._app(Ins(Op.INSTANCE, cd.info[2][0]))
+            self._app(Ins(Op.RAW, " = "))  
+            self._app(Ins(Op.ALLOC, cd.info[2][0], cd.info[2][0]))          
                
         # Instanciate all attributeds for the new instance 
             super = self._current_scope.lookup(cd.info[2][0])
