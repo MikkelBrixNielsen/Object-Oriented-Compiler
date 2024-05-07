@@ -174,7 +174,10 @@ class ASTSymbolVisitor(VisitorsBase):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
-        
+        if t.name[0].upper() != t.name[0]:
+            error_message("Symbol Collection",
+                          f"Class names must be capitalized.",
+                          t.lineno)
         # FIXME - Eliminate recursive extensions by only allowing a 
         # FIXME - class to extend an already defined class
         extensions = []
@@ -383,12 +386,13 @@ class ASTSymbolVisitor(VisitorsBase):
         if (not cn == "expression_integer" and not cn == "expression_float" and 
             not cn == "expression_bool" and not cn == "expression_char" and
             not cn == "expression_call" and not cn == "expression_method"):
-            if cn == "expression_identifier":
-                val = self._current_scope.lookup_this_scope(t.identifier)
-                if val and not val.cat == NameCategory.PARAMETER and val.type not in ["int", "float", "bool", "char"]:
-                    error_message("Symbol Collection",
-                                  f"Returning local variable '{t.identifier}'.",
-                                  t.lineno)
+            #Imposes a restriction as to not return a variabl defined locally to a function unless its a premitive type 
+            #if cn == "expression_identifier":
+                #val = self._current_scope.lookup_this_scope(t.identifier)
+                #if val and not val.cat == NameCategory.PARAMETER and val.type not in ["int", "float", "bool", "char"]:
+                #    error_message("Symbol Collection",
+                #                  f"Returning local variable '{t.identifier}'.",
+                #                  t.lineno)
             ident = self._get_identifier(t)
             val = None
             if cn == "expression_binop":

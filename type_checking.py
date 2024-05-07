@@ -248,9 +248,9 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"Array index has to be an integer.",
                           t.lineno)
         t.type = t.type[:-2]
-        val = self._current_scope.lookup(t.identifier)
-        if val.cat != NameCategory.PARAMETER:
-            self._is_idx_oob(t.idx, val)
+        #val = self._current_scope.lookup(t.identifier)
+        #if val.cat != NameCategory.PARAMETER:
+        #    self._is_idx_oob(t.idx, val)
 
     # TODO - 
         # Evaluate binary expression and determine if its result is dependent on a function or other variable-sized expression
@@ -283,11 +283,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"'{s}' cannot be put into arrays.",
                           t.lineno)
 
+    # FIXME- MIGHT BE USELESS SINCE NOTHING IS KNOWN IN REGARDS TO AN ARRAYS ELEMENTS 
+    # WHEN GIVEN THE IDENTIFIER FOR THE ARRAY
     def _is_idx_oob(self, t, val):
         cn = t.__class__.__name__
         match cn:
             case "expression_integer":
-                if t.integer >= self._get_value_of_binop(val.info[-2] or t.integer < 0):
+                print(val.info)
+                if t.integer >= self._get_value_of_binop(val.info[-2]) or t.integer < 0:
                     error_message("Type Checking",
                                   "Array index out of bounds.",
                                   t.lineno)
@@ -398,6 +401,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                               lineno)
 
     def _get_value_of_binop(self, t):
+        print(t)
+        print()
+        print()
+        print()
+
         cn = t.__class__.__name__
         match cn:
             case "expression_integer":

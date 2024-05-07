@@ -140,6 +140,12 @@ class Emit:
                     self._raw(str(instr.args[0]))
                 case Op.ALLOC:
                     self._raw(f"({instr.args[0]})malloc(sizeof({instr.args[1]}));")
+                case Op.ALLOCSTART:
+                    type = instr.args[0].replace("[]", "*")
+                    self._raw(f"({type})malloc((")
+                case Op.ALLOCEND:
+                    type = instr.args[0].replace("[]", "*")
+                    self._raw(f")*sizeof({type}))")
                 case Op.MEMCHECK:
                     self._add(f"if ({instr.args[0]} == NULL)" + " {\n")
                     self.indent_level += 1
@@ -153,7 +159,7 @@ class Emit:
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
     def _addType(self, instr):
-        type = instr.args[0]
+        type = instr.args[0].replace("[]", "")
         match type:
             case "bool":
                 self._add("int", "Was boolean variables in source code")
@@ -161,14 +167,16 @@ class Emit:
                 self._add(type)
 
     def _addParam(self, instr):
-        s = instr.args[0] + " " + instr.args[1]
+        type = str(instr.args[0]).replace("*", "").replace("[]", "")
+        stars = self._get_stars(instr.args[0])
+        s = type + " " + stars + instr.args[1]
         if instr.args[2]:
             s += ", "
         self._raw(s)
 
     def _createFunctionSignature(self, instr):
         stars = self._get_stars(instr.args[0])
-        type = instr.args[0].replace("[]", "") + stars
+        type = str(instr.args[0]).replace("[]", "") + stars
         if instr.args[0] == "bool":
             type = "int"
         if not instr.args[1] == "main":
@@ -183,7 +191,8 @@ class Emit:
         current = params
         s = ""
         while (current):
-            s += current.type.replace("[]", "") + " " + self._get_stars(current.type)  + current.parameter
+            type = current.type.replace("*", "").replace("[]", "")
+            s += type + " " + self._get_stars(current.type)  + current.parameter
             if current.next:
                 s += ", "
             current = current.next
