@@ -19,7 +19,7 @@ _intermediate_to_C = {
 _print_type = {
     "int": "%d",
     "float": "%f",
-    "char": "%s",
+    "char": "%c",
     "bool": "%d",
     "string": "%s",
 }
@@ -152,7 +152,6 @@ class Emit:
     def _simpleInstruction(self, instr):
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
-    # FIXME - WHAT EVEN THE FUCK IS THIS DUPLICATED CASES WHAT THE ACTUAL FUCKING SHIT IS THIS OMG I HATE IT SO MUCH FUCKING FIX THIS EXTREME PILE OF DOGSHIT
     def _addType(self, instr):
         type = instr.args[0]
         match type:
@@ -168,9 +167,13 @@ class Emit:
         self._raw(s)
 
     def _createFunctionSignature(self, instr):
+        stars = self._get_stars(instr.args[0])
+        type = instr.args[0].replace("[]", "") + stars
+        if instr.args[0] == "bool":
+            type = "int"
         if not instr.args[1] == "main":
             params = self._formatParams(instr.args[2])
-            s = instr.args[0] + " " + instr.args[1] + "(" + params + ");"
+            s = type + " " + instr.args[1] + "(" + params + ");"
             self._addSignature(s)
 
     def _createClassSignature(self, instr):
@@ -180,7 +183,7 @@ class Emit:
         current = params
         s = ""
         while (current):
-            s += current.type + " " + current.parameter
+            s += current.type.replace("[]", "") + " " + self._get_stars(current.type)  + current.parameter
             if current.next:
                 s += ", "
             current = current.next
@@ -188,6 +191,11 @@ class Emit:
     
     def _create_varlist(self, instr):
         s = instr.args[0]
+        if instr.args[2] and instr.args[2][-2:] == "[]":
+            s = self._get_stars(instr.args[2]) + s            
         if instr.args[1]:
             s += ","
         self._raw(" " + s)
+
+    def _get_stars(self, type):
+        return (len(str(type).replace("[]", "*").split("*")) - 1) * "*"

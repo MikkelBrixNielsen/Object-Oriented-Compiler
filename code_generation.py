@@ -72,14 +72,15 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._code.append(instruction)
 
     def preVisit_variables_declaration_list(self, t):
-        if t.decl.__class__.__name__ == "array_list":
-            t.type = str(t.type).replace("[]", "*")
-        self._app(Ins(Op.TYPE, t.type))
+        temp = t.decl.type
+        #if t.decl.type[-2:] == "[]":
+        #    temp = str(t.decl.type).replace("[]", "")
+        self._app(Ins(Op.TYPE, temp))
 
     def midVisit_variables_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
-        if t.decl.__class__.__name__ == "array_list":
-            self._app(Ins(Op.MEMCHECK, t.decl.variable))
+        #if t.decl.type[-2:] == "[]":
+        #    self._app(Ins(Op.MEMCHECK, t.decl.variable))
 
     def preVisit_variables_list(self, t):
         self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
@@ -106,9 +107,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_statement_print(self, t):
         self._app(Ins(Op.START, "printf"))
-        self._app(Ins(Op.PRINT, t.exp.type))
+        if t.exp:
+            self._app(Ins(Op.PRINT, t.exp.type))
+        else:
+            self._app(Ins(Op.PRINT, "char"))
 
     def postVisit_statement_print(self, t):
+        if not t.exp:
+            self._app(Ins(Op.RAW, "' '"))
         self._app(Ins(Op.RAW, ")"))
         self._app(Ins(Op.RAW, ";"))
 
@@ -177,17 +183,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_attributes_declaration_list(self, t):
-        temp = t.type
-        #if t.decl.__class__.__name__ == "array_list":
-        if t.decl.type[-2:] == "[]":
-            temp = str(t.type).replace("[]", "*")
+        temp = t.decl.type
+        #if t.decl.type[-2:] == "[]":
+        #    temp = str(t.type).replace("[]", "")
         self._app(Ins(Op.TYPE, temp))
 
     def midVisit_attributes_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST, t.variable, t.next))
+        self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier))
@@ -195,12 +200,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_function(self, t):
         self._current_scope = t.symbol_table
         if not t.name == "global":
-            if str(t.type)[-2:] == "[]":
-                t.type = t.type[:-2] + "*"
-            self._app(Ins(Op.TYPE, t.type))
+            temp = t.type
+            #if str(temp)[-2:] == "[]":
+            #    temp = str(t.type).replace("[]", "*")
+            self._app(Ins(Op.TYPE, temp))
             self._app(Ins(Op.START, " " + t.name))
             self._app(Ins(Op.IDTL_P))
-            self._app(Ins(Op.SIGNATURE, t.type, t.name, t.par_list))
+            self._app(Ins(Op.SIGNATURE, temp, t.name, t.par_list))
     
     def midVisit_function(self, t):
         if not t.name == "global":
@@ -213,10 +219,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._current_scope = self._current_scope.parent
 
     def preVisit_parameter_list(self, t):
-        if t.type[-2:] == "[]":
-            t.type = t.type[:-2]
-            t.parameter = "*" + t.parameter
-        self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
+        temp = t.type
+        #if temp[-2:] == "[]":
+        #    temp = str(temp).replace("[]", "*")
+        #    stars = len(temp.split("*"))
+        #    temp = temp.replace("*", "")
+        #    t.parameter = (stars * "*") + t.parameter
+        self._app(Ins(Op.PARAMS, temp, t.parameter, t.next))
 
     def preVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, t.name))
@@ -233,9 +242,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_call(t)
         self._app(Ins(Op.RAW , ";"))
 
-
-
-
     def preVisit_statement_method(self, t):
         self._app(Ins(Op.INDENT))
         self.preVisit_expression_method(t)
@@ -244,10 +250,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_method(t)
         self._app(Ins(Op.RAW , ";"))
         
-
-
-
-
     def midVisit_expression_list(self, t):
         self._app(Ins(Op.COMMA, t.next))
 
@@ -345,9 +347,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_array_list(self, t):
         s = " " + t.variable
-        temp = str(t.type).replace("[]", "*")
         self._app(Ins(Op.ASSIGN, s))
-        self._app(Ins(Op.RAW, f"({temp})malloc(("))
+
+    
+    def preVisit_expression_new_array(self, t):
+        #temp = str(t.type).replace("[]", "*")
+        self._app(Ins(Op.RAW, f"({t.type})malloc(("))
 
     def midVisit_expression_new_array(self, t):
         #if t.data:
@@ -355,7 +360,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             #self._app(Ins(Op.RAW, "{"))
         #else:
         #self._app(Ins(Op.RAW, "]"))
-        temp = str(t.type).replace("[]", "*")[:-1]
+        #temp = str(t.type).replace("[]", "*")[:-1]
+        temp = str(t.type)[:-2]
         self._app(Ins(Op.RAW, f")*sizeof({temp}))"))
 
     #def postVisit_expression_new_array(self, t):
@@ -377,7 +383,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if len(cd.info[2]) > 0: # len > 0 => there are extensions 
             temp = cd.info[2][0].lower()
             self._app(Ins(Op.TYPE, cd.info[2][0] + "*"))
-            self._app(Ins(Op.VARLIST, temp, None))
+            self._app(Ins(Op.VARLIST, temp, None, None))
             self._app(Ins(Op.RAW, " = "))  
             self._app(Ins(Op.ALLOC, cd.info[2][0], cd.info[2][0]))          
                
@@ -427,7 +433,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
                 self._app(Ins(Op.TYPE, cd.info[2][0] + "*"))
-                self._app(Ins(Op.VARLIST, cd.info[2][0].lower(), None))
+                self._app(Ins(Op.VARLIST, cd.info[2][0].lower(), None, None))
                 self._app(Ins(Op.RAW, ";"))
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
@@ -451,7 +457,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.IDTL_M)) # remove indentation level 
                     self._app(Ins(Op.END))
                     self._app(Ins(Op.IDTL_P)) # add indentation level
-                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0], AST.parameter_list(t.name + "*", "this", None, -1)))
+                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0], AST.parameter_list(t.name + "*", "this", None, t.lineno)))
 
     def _is_member_in_tuple_list(self, m, tl):
         for member in tl:

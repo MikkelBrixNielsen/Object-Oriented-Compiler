@@ -175,10 +175,10 @@ def p_optional_variables_declaration_list(t):
     t[0] = t[1]
 
 def p_variables_declaration_list(t):
-    '''variables_declaration_list : TYPE variables_list SEMICOL
-                                  | TYPE variables_list SEMICOL variables_declaration_list
-                                  | array_list SEMICOL
-                                  | array_list SEMICOL variables_declaration_list'''
+    '''variables_declaration_list : FT variables_list SEMICOL
+                                  | FT variables_list SEMICOL variables_declaration_list'''
+                                  #| array_list SEMICOL
+                                  #| array_list SEMICOL variables_declaration_list'''
     if len(t) == 3:
         t[0] = AST.variables_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
     elif len(t) == 4:
@@ -215,13 +215,13 @@ def p_ARR(t):
     else:
         t[0] = "[]" + t[3]
 
-def p_array_list(t):
-    '''array_list : array IDENT ASSIGN expression_new_array
-                  | array IDENT expression_new_array COMMA array_list'''
-    if len(t) == 5:
-        t[0] = AST.array_list(t[2], t[1], t[4], None, t.lexer.lineno)
-    else:
-        t[0] = AST.array_list(t[2], t[1], t[4], t[5], t.lexer.lineno)
+#def p_array_list(t):
+#    '''array_list : array IDENT ASSIGN expression_new_array
+#                  | array IDENT expression_new_array COMMA array_list'''
+#    if len(t) == 5:
+#        t[0] = AST.array_list(t[2], t[1], t[4], None, t.lexer.lineno)
+#    else:
+#        t[0] = AST.array_list(t[2], t[1], t[4], t[5], t.lexer.lineno)
 
 def p_variables_list(t):
     '''variables_list : IDENT
@@ -367,9 +367,12 @@ def p_statement_return(t):
     t[0] = AST.statement_return(t[2], t.lexer.lineno)
 
 def p_statement_print(t):
-    'statement_print : PRINT LPAREN expression RPAREN'
-    t[0] = AST.statement_print(t[3], t.lexer.lineno)
-
+    '''statement_print : PRINT LPAREN expression RPAREN
+                       | PRINT LPAREN RPAREN'''
+    if len(t) == 5:
+        t[0] = AST.statement_print(t[3], t.lexer.lineno)
+    else:
+        t[0] = AST.statement_print(None, t.lexer.lineno)
 def p_statement_assignment(t):
     'statement_assignment : lhs ASSIGN expression'
     t[0] = AST.statement_assignment(t[1], t[3], t.lexer.lineno)

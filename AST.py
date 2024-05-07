@@ -259,7 +259,8 @@ class statement_print:
 
     def accept(self, visitor):
         visitor.preVisit(self)
-        self.exp.accept(visitor)
+        if self.exp:
+            self.exp.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass

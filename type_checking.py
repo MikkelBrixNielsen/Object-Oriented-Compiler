@@ -67,11 +67,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Variable '{lhs[0]}' not found.",
                           t.lineno)
-        if lhs[2] == NameCategory.PARAMETER:
-            error_message("Type Checking",
-                          f"Assignment to parameter '{lhs[0]}' not allowed.",
-                          t.lineno)
-        elif lhs[2] == NameCategory.FUNCTION:
+        #if lhs[2] == NameCategory.PARAMETER:
+        #    error_message("Type Checking",
+        #                  f"Assignment to parameter '{lhs[0]}' not allowed.",
+        #                  t.lineno)
+        if lhs[2] == NameCategory.FUNCTION:
             error_message("Type Checking",
                           f"Assignment to function '{lhs[0]}' not allowed.",
                           t.lineno)
@@ -249,7 +249,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         t.type = t.type[:-2]
         val = self._current_scope.lookup(t.identifier)
-        self._is_idx_oob(t.idx, val)
+        if val.cat != NameCategory.PARAMETER:
+            self._is_idx_oob(t.idx, val)
 
     # TODO - 
         # Evaluate binary expression and determine if its result is dependent on a function or other variable-sized expression
