@@ -52,10 +52,8 @@ class SymbolTable:
             return self._tab[name]
         else:
             return None
-        
 
 # Symbol Collection
-
 class ASTSymbolVisitor(VisitorsBase):
     """The visitor implementing the symbol phase."""
     def __init__(self):
@@ -299,11 +297,6 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_array_list(self, t):
         if t.name: # the array is an attribute on a class if it has a name
-            # you are not allowed to assign defualt values to arrays that are attributes on some class
-            #if t.exp.data:
-            #    error_message("Symbol Collection",
-            #                  f"Class attributes do not support direct assignment at the point of declaration within the class definition.",
-            #                  t.lineno)
             value = self._current_scope.lookup(t.name)
             value.info[0].append((t.variable, t.type))
         self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
