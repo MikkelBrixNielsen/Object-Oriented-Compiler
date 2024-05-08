@@ -365,20 +365,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def _extend_class(self, t):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
-            self._app(Ins(Op.TYPE, cd.info[2][0]))
-            self._app(Ins(Op.VARLIST, "*" + cd.info[2][0].lower(), None, None))
-            self._app(Ins(Op.RAW, ";"))
-        
+            for ext in cd.info[2]:
+                self._app(Ins(Op.TYPE, ext))
+                self._app(Ins(Op.VARLIST, "*" + ext.lower(), None, None))
+                self._app(Ins(Op.RAW, ";"))
+                pass
         self._app(Ins(Op.CLASSMID, t.name))
-
-
-        #current = cd.info[2][0]
-        if len(cd.info[2]) > 0:
-            print(cd.info[2][0])
-        #while current:
-        #    pass
-
-
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
                 if len(member) >= 3: # method
@@ -393,10 +385,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.IDTL_M))
                     self._app(Ins(Op.END))
                     self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0], AST.parameter_list(t.name, "*this", None, t.lineno)))
-           
-            
-            #cd = self._current_scope.lookup(cd.info[2][0]) 
-
 
     def _is_member_in_tuple_list(self, m, tl):
         for member in tl:

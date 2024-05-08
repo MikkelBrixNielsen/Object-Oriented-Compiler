@@ -176,7 +176,7 @@ class Emit:
 
     def _createFunctionSignature(self, instr):
         stars = self._get_stars(instr.args[0])
-        type = str(instr.args[0]).replace("[]", "") + stars
+        type = str(instr.args[0]).replace("[]", "").replace("*", "") + stars
         if instr.args[0] == "bool":
             type = "int"
         if not instr.args[1] == "main":

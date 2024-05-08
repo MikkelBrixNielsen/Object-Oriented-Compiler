@@ -371,8 +371,8 @@ class ASTSymbolVisitor(VisitorsBase):
                 else: # String comparision for extensions
                     if new_elem in this.info[i]:
                         found = True
-                if not found and i < 2: # Only adds attributes and methods to the list new_additions
-                        new_additions.append(new_elem)
+                if not found and i != 2: # Don't add an extension's extensions (they are stored in idx 2 of a cds' info)
+                    new_additions.append(new_elem)
         this.info[3] += new_additions
     
     def _check_if_initialized(self, cn, t):
