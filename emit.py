@@ -100,7 +100,6 @@ class Emit:
                 case Op.CLASSMID:
                     self.indent_level -= 1
                     self._add("};\n")
-                    #self._add("} " + instr.args[0] + ";\n")
                 case Op.VARLIST:
                     self._create_varlist(instr)
                 case Op.PARAMS:
@@ -120,7 +119,11 @@ class Emit:
                 case Op.PRINT:
                     self._raw("\"" + _print_type[instr.args[0]] + "\\n\", ")
                 case Op.START:
-                    self._add(instr.args[0] + "(")
+                    stars = self._get_stars(instr.args[1])
+                    s = instr.args[0]
+                    if len(stars) > 0:
+                        s = " " + stars + instr.args[0].strip()
+                    self._add(s + "(")
                 case Op.PREMID:
                     self._raw(") {\n")
                 case Op.MID:
@@ -159,7 +162,7 @@ class Emit:
         self._raw(f" {_intermediate_to_C[instr.opcode]} ")
 
     def _addType(self, instr):
-        type = instr.args[0].replace("[]", "")
+        type = instr.args[0].replace("[]", "").replace("*", "")
         match type:
             case "bool":
                 self._add("int", "Was boolean variables in source code")
@@ -176,12 +179,12 @@ class Emit:
 
     def _createFunctionSignature(self, instr):
         stars = self._get_stars(instr.args[0])
-        type = str(instr.args[0]).replace("[]", "").replace("*", "") + stars
-        if instr.args[0] == "bool":
+        type = str(instr.args[0]).replace("[]", "").replace("*", "")
+        if type == "bool":
             type = "int"
         if not instr.args[1] == "main":
             params = self._formatParams(instr.args[2])
-            s = type + " " + instr.args[1] + "(" + params + ");"
+            s = type + " " + stars + instr.args[1] + "(" + params + ");"
             self._addSignature(s)
 
     def _createClassSignature(self, instr):
@@ -199,9 +202,7 @@ class Emit:
         return s    
     
     def _create_varlist(self, instr):
-        s = instr.args[0]
-        if instr.args[2] and instr.args[2][-2:] == "[]":
-            s = self._get_stars(instr.args[2]) + s            
+        s = self._get_stars(instr.args[2]) + instr.args[0]
         if instr.args[1]:
             s += ","
         self._raw(" " + s)

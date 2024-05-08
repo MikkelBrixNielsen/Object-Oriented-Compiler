@@ -194,9 +194,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"Identifier '{t.name}' is not a function.",
                           t.lineno)
         cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
-        meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[1])
-        if not meth:
-            meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[3])
+        meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[1] + cd.info[3])
         self._exp_check(t.name, t.exp_list, meth, t.lineno)   
 
     def postVisit_expression_method(self, t):
@@ -626,7 +624,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                               f"No class with name {val.type[:-1]} found.",
                               t.lineno)
             par_list = None
-            for elem in cd.info[1]:
+            for elem in cd.info[1] + cd.info[3]:
                 if elem[0] == t.name:
                     par_list = elem[2].par_list
             if not par_list:

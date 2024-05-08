@@ -64,8 +64,18 @@ class Ins:
 class ASTCodeGenerationVisitor(VisitorsBase):
     """Implements the intermediate code generation from the AST."""
     def __init__(self):
+        self._counter = "0000"
         self._current_scope = None
         self._code = []
+
+    def _numgen(self):
+        temp = int(self._counter) + 1
+        counter = 0
+        while temp > 0:
+            temp = temp // 10
+            counter = counter + 1
+        self._counter = "0"*(4-counter) + str(int(self._counter) + 1)
+        return "_" + self._counter
 
     def get_code(self):
         return self._code
@@ -104,7 +114,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_print(self, t):
-        self._app(Ins(Op.START, "printf"))
+        self._app(Ins(Op.START, "printf", None))
         if t.exp:
             self._app(Ins(Op.PRINT, t.exp.type))
         else:
@@ -117,7 +127,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_ifthenelse(self, t):
-        self._app(Ins(Op.START, "if "))
+        self._app(Ins(Op.START, "if ", None))
         self._app(Ins(Op.IDTL_P))
 
     def preMidVisit_statement_ifthenelse(self, t):
@@ -133,7 +143,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.END))
 
     def preVisit_statement_while(self, t):
-        self._app(Ins(Op.START, "while "))
+        self._app(Ins(Op.START, "while ", None))
         self._app(Ins(Op.IDTL_P))
 
     def midVisit_statement_while(self, t):
@@ -196,7 +206,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._current_scope = t.symbol_table
         if not t.name == "global":
             self._app(Ins(Op.TYPE, t.type))
-            self._app(Ins(Op.START, " " + t.name))
+            self._app(Ins(Op.START, " " + t.name, t.type))
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, t.name, t.par_list))
     
@@ -330,33 +340,54 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         cd = self._current_scope.lookup(t.struct)
-        if len(cd.info[2]) > 0: # len > 0 => there are extensions 
-            temp = cd.info[2][0].lower()
-            self._app(Ins(Op.TYPE, cd.info[2][0]))
-            self._app(Ins(Op.VARLIST, "*" + temp, None, None))
+        current = cd
+        prev = t.identifier
+        while len(current.info[2]) > 0:
+            name = current.info[2][0].lower()
+            var = name + self._numgen()
+            type = current.info[2][0] + "*"
+            self._app(Ins(Op.TYPE, type))
+            self._app(Ins(Op.VARLIST, var, None, type))
             self._app(Ins(Op.RAW, " = "))  
-            self._app(Ins(Op.ALLOC, cd.info[2][0], cd.info[2][0]))          
-               
-        # Instanciate all attributeds for the new instance 
-            super = self._current_scope.lookup(cd.info[2][0])
+            self._app(Ins(Op.ALLOC, type, type[:-1]))
+            self._app(Ins(Op.MEMCHECK, var))
+
+            # Assigns created struct to its parent class
+            self._app(Ins(Op.INDENT))
+            self._app(Ins(Op.RAW, prev + "->" + name + " = " + var))
+            self._app(Ins(Op.RAW, ";"))
+            
+            # Instanciate all attributeds for the new instance 
+            super = self._current_scope.lookup(current.info[2][0])
             # FIXME - NEEDS running number 
             for attr in super.info[0]:
                 self._app(Ins(Op.INDENT))
-                self._app(Ins(Op.ASSIGN, temp + "->" + attr[0]))
+                self._app(Ins(Op.ASSIGN, var + "->" + attr[0]))
                 if attr[1] == "int" or attr[1][-2:] == "[]" or attr[0] == "bool":
                     self._app(Ins(Op.RAW, "0"))
                 elif attr[1] == "float":
                     self._app(Ins(Op.RAW, "0.0"))
                 elif attr[1] == "char":
                     self._app(Ins(Op.RAW, "''"))
+                elif attr[1][-1] == "*":
+                    ins1 = self._code.pop()
+                    ins2 = self._code.pop()
+                    var1 = attr[1][:-1].lower() + self._numgen()
+                    self._app(Ins(Op.TYPE, attr[1]))
+                    self._app(Ins(Op.VARLIST, var1, None, attr[1]))
+                    self._app(Ins(Op.RAW, " = "))  
+                    self._app(Ins(Op.ALLOC, attr[1], attr[1][:-1]))
+                    self._app(Ins(Op.MEMCHECK, var1))
+                    self._app(ins2)
+                    self._app(ins1)
+                    self._app(Ins(Op.RAW, var1))
                 else:
                     print(f"{attr[1]} not implemented in _extension_instance in code generation - please fix")
                 self._app(Ins(Op.RAW, ";"))
 
-        # Assigns created struct to its parent class
-            self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, t.identifier + "->" + temp + " = " + temp))
-            self._app(Ins(Op.RAW, ";"))
+            prev = var
+            current = self._current_scope.lookup(current.info[2][0])
+            
 
     # FIXME Make it so code is generated for the extensions 
     # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
@@ -375,7 +406,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             for member in cd.info[3]: # where the additions are located
                 if len(member) >= 3: # method
                     self._app(Ins(Op.TYPE, member[1]))
-                    self._app(Ins(Op.START, " " + t.name + "_" + member[0]))
+                    self._app(Ins(Op.START, " " + t.name + "_" + member[0], member[1]))
                     self._app(Ins(Op.PARAMS, t.name, "*this", None))
                     self._app(Ins(Op.PREMID))
                     self._app(Ins(Op.IDTL_P))
