@@ -84,27 +84,29 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._code.append(instruction)
 
     def preVisit_variables_declaration_list(self, t):
-        temp = t.decl.type
-        self._app(Ins(Op.TYPE, temp))
+        self._app(Ins(Op.TYPE, t.decl.type))        
 
     def midVisit_variables_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_variables_list(self, t):
-        self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
+        val = self._current_scope.lookup(t.variable)
+        val.info.append(self._numgen())
+        self._app(Ins(Op.VARLIST, t.variable + val.info[-1], t.next, t.type))
 
     def preVisit_statement_assignment(self, t):
-            self._app(Ins(Op.INDENT))
+        self._app(Ins(Op.INDENT))
         
     def midVisit_statement_assignment(self, t):
-        lhs = ""
         if isinstance(t.lhs , str): # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
-            lhs = t.lhs
-        # else the expression will do so automatically when visisted by the visitor
-        self._app(Ins(Op.ASSIGN, lhs))
+            val = self._current_scope.lookup(t.lhs)
+            self._app(Ins(Op.ASSIGN, t.lhs + val.info[-1]))
+        else: 
+            # else the expression will do so automatically when visisted by the visitor
+            self._app(Ins(Op.ASSIGN, ''))
 
     def postVisit_statement_assignment(self, t):
-        if not t.rhs.__class__.__name__ == "expression_new_instance": # put a not infront of this
+        if not t.rhs.__class__.__name__ == "expression_new_instance":
             self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
@@ -165,13 +167,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_char(self, t):
         self._app(Ins(Op.RAW, t.char))
     
-    def postVisit_attribute(self, t):
-        self._app(Ins(Op.THIS))
-        self._app(Ins(Op.RAW, t.attr))
-
     def preVisit_class_declaration(self, t):
-        self._app(Ins(Op.CLASS, t.name))
         self._current_scope = t.symbol_table
+        self._app(Ins(Op.CLASS, t.name))# + val.info[-1]))
 
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
@@ -180,8 +178,19 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._extend_class(t)
 
     def preVisit_method(self, t):
-        t.name = t.parent + "_" + t.name
-        self.preVisit_function(t)
+        name = t.parent + "_" + t.name
+        self._current_scope = t.symbol_table
+        if not t.name == "global":
+            self._app(Ins(Op.TYPE, t.type))
+            temp = name
+            if not name == "main":
+                val = self._current_scope.parent.lookup(t.name)
+                val.info = [val.info, self._numgen()]
+                temp = name + val.info[-1]
+            self._app(Ins(Op.START, " " + temp, t.type))
+            self._app(Ins(Op.IDTL_P))
+            self._app(Ins(Op.SIGNATURE, t.type, temp, t.par_list))
+        t.name = name
     
     def midVisit_method(self, t):
         self.midVisit_function(t)
@@ -190,8 +199,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def preVisit_attributes_declaration_list(self, t):
-        temp = t.decl.type
-        self._app(Ins(Op.TYPE, temp))
+        self._app(Ins(Op.TYPE, t.decl.type))
 
     def midVisit_attributes_declaration_list(self, t):
         self._app(Ins(Op.RAW, ";"))
@@ -200,15 +208,21 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
-        self._app(Ins(Op.RAW, t.identifier))
+        val = self._current_scope.lookup(t.identifier)
+        self._app(Ins(Op.RAW, t.identifier + val.info[-1]))
 
     def preVisit_function(self, t):
         self._current_scope = t.symbol_table
         if not t.name == "global":
+            name = t.name
             self._app(Ins(Op.TYPE, t.type))
-            self._app(Ins(Op.START, " " + t.name, t.type))
+            if not t.name == "main":
+                val = self._current_scope.parent.lookup(t.name)
+                val.info = [val.info, self._numgen()]
+                name = name + val.info[-1]
+            self._app(Ins(Op.START, " " + name, t.type))
             self._app(Ins(Op.IDTL_P))
-            self._app(Ins(Op.SIGNATURE, t.type, t.name, t.par_list))
+            self._app(Ins(Op.SIGNATURE, t.type, name, t.par_list))
     
     def midVisit_function(self, t):
         if not t.name == "global":
@@ -221,28 +235,33 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._current_scope = self._current_scope.parent
 
     def preVisit_parameter_list(self, t):
-        temp = str(t.type)
-        self._app(Ins(Op.PARAMS, temp, t.parameter, t.next))
+        self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
 
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, t.name))
         self._app(Ins(Op.RAW, "("))
-    
+
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, ")"))
 
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_statement_call(self, t):
         self._app(Ins(Op.INDENT))
         self.preVisit_expression_call(t)
-
+    
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_statement_call(self, t):
         self.postVisit_expression_call(t)
         self._app(Ins(Op.RAW , ";"))
 
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_statement_method(self, t):
         self._app(Ins(Op.INDENT))
         self.preVisit_expression_method(t)
 
+    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_statement_method(self, t):
         self.postVisit_expression_method(t)
         self._app(Ins(Op.RAW , ";"))
@@ -293,15 +312,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def postVisit_expression_attribute(self, t):
         cd = None
+        var = t.inst
         if t.inst == "this":
             cd = self._current_scope.lookup(self._current_scope.lookup(NameCategory.THIS).cat)
         else:
             cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
-        
+            var = var + self._current_scope.lookup(t.inst).info[-1]
+
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
-            self._app(Ins(Op.RAW, t.inst + "->" + t.field))
+            self._app(Ins(Op.RAW, var + "->" + t.field))
         else:
-            self._app(Ins(Op.RAW, t.inst + "->" + cd.info[2][0].lower() + "->" + t.field))
+            self._app(Ins(Op.RAW, var + "->" + cd.info[2][0].lower() + "->" + t.field))
 
     def preVisit_expression_method(self, t):
         name = t.inst
@@ -320,7 +341,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_call(t)
 
     def preVisit_array_list(self, t):
-        s = " " + t.variable
+        s = " " + t.variable + self._current_scope.lookup(t.variable).info[-1]
         self._app(Ins(Op.ASSIGN, s))
     
     def preVisit_expression_new_array(self, t):
@@ -330,7 +351,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ALLOCEND, t.type[:-2]))
 
     def preVisit_expression_array_indexing(self, t):
-        self._app(Ins(Op.RAW, f"{t.identifier}["))
+        s = t.identifier + self._current_scope.lookup(t.identifier).info[-1]
+        self._app(Ins(Op.RAW, f"{s}["))
 
     def postVisit_expression_array_indexing(self, t):
         self._app(Ins(Op.RAW, "]"))
@@ -339,8 +361,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - RUNNING NUMBER
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
-        cd = self._current_scope.lookup(t.struct)
-        current = cd
+        current = self._current_scope.lookup(t.struct)
         prev = t.identifier
         while len(current.info[2]) > 0:
             name = current.info[2][0].lower()
@@ -397,6 +418,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
             for ext in cd.info[2]:
+                val = self._current_scope.lookup(ext)
                 self._app(Ins(Op.TYPE, ext))
                 self._app(Ins(Op.VARLIST, "*" + ext.lower(), None, None))
                 self._app(Ins(Op.RAW, ";"))
@@ -405,7 +427,11 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
                 if len(member) >= 3: # method
-                    self._app(Ins(Op.TYPE, member[1]))
+                    if member[1].replace("[]", "").replace("*", "") not in ["int", "float", "char", "bool"]:
+                        val = self._current_scope.lookup(member[1][:-1])
+                        self._app(Ins(Op.TYPE, member[1]))
+                    else:
+                        self._app(Ins(Op.TYPE, member[1]))
                     self._app(Ins(Op.START, " " + t.name + "_" + member[0], member[1]))
                     self._app(Ins(Op.PARAMS, t.name, "*this", None))
                     self._app(Ins(Op.PREMID))

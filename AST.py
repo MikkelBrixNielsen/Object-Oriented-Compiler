@@ -23,7 +23,6 @@ class global_body:
         visitor.preMidVisit(self)
         if self.functions_decl:
             self.functions_decl.accept(visitor)
-        
         visitor.postMidVisit(self)
 
 @dataclass
