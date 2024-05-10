@@ -269,10 +269,13 @@ class statement_assignment:
 
     def accept(self, visitor):
         visitor.preVisit(self)
+        self.rhs.accept(visitor)
+        #if not isinstance(self.lhs, str):  
+        #    self.lhs.accept(visitor)
+        visitor.midVisit(self)
         if not isinstance(self.lhs, str):  
             self.lhs.accept(visitor)
-        visitor.midVisit(self)
-        self.rhs.accept(visitor)
+        #self.rhs.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass

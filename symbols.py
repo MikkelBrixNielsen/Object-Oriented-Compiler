@@ -352,7 +352,6 @@ class ASTSymbolVisitor(VisitorsBase):
         self.variable_offset += 1
 
     # Extends class with appropriate methods and attributes 
-    # Maybe works as should maybe not IDK ask Steffen
     def _extend(self, t, ext):
         this = self._current_scope.lookup(t.name)
         if not this:
@@ -363,15 +362,12 @@ class ASTSymbolVisitor(VisitorsBase):
         for i in range(len(ext.info)):
             for new_elem in ext.info[i]:
                 found = False
-                if i < 2: # Tuple comparison for attributes and methods
+                if i != 2: # Tuple comparison for attributes, methods, and extensions
                     for elem in this.info[i]:
                         if new_elem[0] == elem[0]:
                             found = True
                             break # new_elem was found, so stop looking for it
-                else: # String comparision for extensions
-                    if new_elem in this.info[i]:
-                        found = True
-                if not found and i != 2: # Don't add an extension's extensions (they are stored in idx 2 of a cds' info)
+                if not found and i != 2:
                     new_additions.append(new_elem)
         this.info[3] += new_additions
     

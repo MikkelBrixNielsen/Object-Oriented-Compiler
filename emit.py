@@ -22,6 +22,7 @@ _print_type = {
     "char": "%c",
     "bool": "%d",
     "string": "%s",
+    "*": "%p",
 }
 
 # Emitting
@@ -117,7 +118,13 @@ class Emit:
                 case Op.SIGNATURE:
                     self._createFunctionSignature(instr)
                 case Op.PRINT:
-                    self._raw("\"" + _print_type[instr.args[0]] + "\\n\", ")
+                    t = instr.args[0]
+                    if len(self._get_stars(t)) > 0:
+                        t = "*"    
+                    s = "\"" + _print_type[t] + "\\n\", "
+                    if t == "*":
+                        s = s + "(void*)"
+                    self._raw(s)
                 case Op.START:
                     stars = self._get_stars(instr.args[1])
                     s = instr.args[0]

@@ -494,19 +494,23 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def _get_type(self, t):
           match t.__class__.__name__:
             case "expression_new_instance":
-                return t.struct + "*"
+                t.type = t.struct + "*"
+                return t.type
             case "expression_attribute":
                 return t.type if t.type != None else self._exist_membership(t, "attribute")
             case "expression_method":
                 return t.type if t.type != None else self._exist_membership(t, "method")
             case "expression_binop":
-                return self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
+                t.type = self._get_effective_type(self._get_type(t.lhs), self._get_type(t.rhs), t)
+                return t.type
             case "expression_call":
-                return self._current_scope.lookup(t.name).type
+                t.type = self._current_scope.lookup(t.name).type
+                return t.type
             case "expression_integer" | "expression_float" | "expression_boolean" | "expression_char" | "expression_new_array" | "expression_array_indexing" | "expression_group":
                 return t.type
             case "expression_identifier":
-                return self._current_scope.lookup(t.identifier).type
+                t.type = self._current_scope.lookup(t.identifier).type
+                return t.type
             case "parameter_list":
                   return t.type
             case _:
