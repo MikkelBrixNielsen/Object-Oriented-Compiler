@@ -18,12 +18,11 @@ class global_body:
             self.assignment_list.accept(visitor)
         if self.class_decl:
             self.class_decl.accept(visitor)
-        if self.main_function:
-            self.main_function.accept(visitor)
-        visitor.preMidVisit(self)
         if self.functions_decl:
             self.functions_decl.accept(visitor)
-        visitor.postMidVisit(self)
+        if self.main_function:
+            self.main_function.accept(visitor)
+        visitor.postVisit(self)
 
 @dataclass
 class body:
@@ -39,10 +38,10 @@ class body:
         visitor.preMidVisit(self)
         if self.functions_decl:
             self.functions_decl.accept(visitor)
-        visitor.postMidVisit(self)
+        #visitor.postMidVisit(self)
         if self.stm_list:
             self.stm_list.accept(visitor)
-        visitor.postVisit(self)
+        #visitor.postVisit(self)
 
 @dataclass
 class variables_declaration_list:

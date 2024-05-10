@@ -399,11 +399,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                               lineno)
 
     def _get_value_of_binop(self, t):
-        print(t)
-        print()
-        print()
-        print()
-
         cn = t.__class__.__name__
         match cn:
             case "expression_integer":
@@ -533,7 +528,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                     return "int"
                 else: 
                     return "float"
-                
+    
+
+    # FIXME : IS THIS ENOUGH ------------------------------------------------------------------------------
+    # Type checking does not seem to allow for attributes access more than 1 extension deep for some reason
     # Checks if instance trying to be accessed exits and has field as member
     def _exist_membership(self, t, cat):
         inst = self._current_scope.lookup(t.inst)

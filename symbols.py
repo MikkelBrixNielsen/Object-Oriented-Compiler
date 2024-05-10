@@ -163,7 +163,7 @@ class ASTSymbolVisitor(VisitorsBase):
         # if variables_list has a next pass along its type
         if t.next: 
             t.next.type = t.type
-        self._record_variables(t, NameCategory.VARIABLE)
+        self._record_variables(t, NameCategory.VARIABLE, t.type)
 
     # FIXME make class declaration the descriptor and give class 
     # FIXME declaration in lexer a class body instead of descriptor???

@@ -67,6 +67,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._counter = "0000"
         self._current_scope = None
         self._code = []
+        self._lables = {}
 
     def _numgen(self):
         temp = int(self._counter) + 1
@@ -90,17 +91,15 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_variables_list(self, t):
-        val = self._current_scope.lookup(t.variable)
-        val.info.append(self._numgen())
-        self._app(Ins(Op.VARLIST, t.variable + val.info[-1], t.next, t.type))
+        self._lables[t.variable] = self._numgen()
+        self._app(Ins(Op.VARLIST, t.variable + self._lables[t.variable], t.next, t.type))
 
     def preVisit_statement_assignment(self, t):
         self._app(Ins(Op.INDENT))
         
     def midVisit_statement_assignment(self, t):
         if isinstance(t.lhs , str): # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
-            val = self._current_scope.lookup(t.lhs)
-            self._app(Ins(Op.ASSIGN, t.lhs + val.info[-1]))
+            self._app(Ins(Op.ASSIGN, t.lhs + self._lables[t.lhs]))
         else: 
             # else the expression will do so automatically when visisted by the visitor
             self._app(Ins(Op.ASSIGN, ''))
@@ -169,7 +168,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
-        self._app(Ins(Op.CLASS, t.name))# + val.info[-1]))
+        self._app(Ins(Op.CLASS, t.name))
 
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
@@ -184,9 +183,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.TYPE, t.type))
             temp = name
             if not name == "main":
-                val = self._current_scope.parent.lookup(t.name)
-                val.info = [val.info, self._numgen()]
-                temp = name + val.info[-1]
+                self._lables[t.name] = self._numgen()
+                temp = name + self._lables[t.name]
             self._app(Ins(Op.START, " " + temp, t.type))
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, temp, t.par_list))
@@ -208,8 +206,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
-        val = self._current_scope.lookup(t.identifier)
-        self._app(Ins(Op.RAW, t.identifier + val.info[-1]))
+        self._app(Ins(Op.RAW, t.identifier + self._lables[t.identifier]))
 
     def preVisit_function(self, t):
         self._current_scope = t.symbol_table
@@ -217,9 +214,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             name = t.name
             self._app(Ins(Op.TYPE, t.type))
             if not t.name == "main":
-                val = self._current_scope.parent.lookup(t.name)
-                val.info = [val.info, self._numgen()]
-                name = name + val.info[-1]
+                self._lables[t.name] = self._numgen()
+                name = name + self._lables[t.name]
             self._app(Ins(Op.START, " " + name, t.type))
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, name, t.par_list))
@@ -237,31 +233,25 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_parameter_list(self, t):
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
 
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_expression_call(self, t):
-        self._app(Ins(Op.RAW, t.name))
+        self._app(Ins(Op.RAW, t.name + self._lables[t.name]))
         self._app(Ins(Op.RAW, "("))
 
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_expression_call(self, t):
         self._app(Ins(Op.RAW, ")"))
 
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_statement_call(self, t):
         self._app(Ins(Op.INDENT))
         self.preVisit_expression_call(t)
     
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_statement_call(self, t):
         self.postVisit_expression_call(t)
         self._app(Ins(Op.RAW , ";"))
 
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def preVisit_statement_method(self, t):
         self._app(Ins(Op.INDENT))
         self.preVisit_expression_method(t)
 
-    # FIXME - DOES NOT HAVE RUNNING NUMBER
     def postVisit_statement_method(self, t):
         self.postVisit_expression_method(t)
         self._app(Ins(Op.RAW , ";"))
@@ -301,7 +291,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_expression_new_instance(self, t):
         self._current_scope = t.symbol_table
         self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
-        self._app(Ins(Op.MEMCHECK, t.identifier))
+        self._app(Ins(Op.MEMCHECK, t.identifier + self._lables[t.identifier]))
         self._extension_instance(t)
 
     def preVisit_instance_expression_list(self, t):
@@ -317,7 +307,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             cd = self._current_scope.lookup(self._current_scope.lookup(NameCategory.THIS).cat)
         else:
             cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
-            var = var + self._current_scope.lookup(t.inst).info[-1]
+            var = var + self._lables[t.inst]
 
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
             self._app(Ins(Op.RAW, var + "->" + t.field))
@@ -325,14 +315,21 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.RAW, var + "->" + cd.info[2][0].lower() + "->" + t.field))
 
     def preVisit_expression_method(self, t):
-        name = t.inst
-        if not name == "this":
-            name = self._current_scope.lookup(t.inst).type[:-1]
+        prefix = ""
+        inst_lable = ""
+        name_lable = self._lables[t.name]
+        if not t.inst == "this":
+            prefix = self._current_scope.lookup(t.inst).info[-1][:-1]
+            inst_lable = self._lables[t.inst]
         else:
-            name = self._current_scope.lookup(t.name).info.parent
-        self._app(Ins(Op.RAW, name + "_"))
-        self.preVisit_expression_call(t)
-        args = t.inst
+            prefix = self._current_scope.lookup(NameCategory.THIS).type[:-1]
+
+        self._app(Ins(Op.RAW, prefix + "_"))
+        self._app(Ins(Op.RAW, t.name + name_lable))
+        self._app(Ins(Op.RAW, "("))
+
+        # constructs list of parameters
+        args = t.inst + inst_lable
         if t.exp_list:
             args += ", "
         self._app(Ins(Op.RAW, args))
@@ -341,7 +338,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self.postVisit_expression_call(t)
 
     def preVisit_array_list(self, t):
-        s = " " + t.variable + self._current_scope.lookup(t.variable).info[-1]
+        s = " " + t.variable + self._lables[t.variable]
         self._app(Ins(Op.ASSIGN, s))
     
     def preVisit_expression_new_array(self, t):
@@ -351,7 +348,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ALLOCEND, t.type[:-2]))
 
     def preVisit_expression_array_indexing(self, t):
-        s = t.identifier + self._current_scope.lookup(t.identifier).info[-1]
+        s = t.identifier + self._lables[t.identifier]
         self._app(Ins(Op.RAW, f"{s}["))
 
     def postVisit_expression_array_indexing(self, t):
