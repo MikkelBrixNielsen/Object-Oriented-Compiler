@@ -500,6 +500,15 @@ class expression_list:
         visitor.postVisit(self)
 
 @dataclass
+class expression_null:
+    identifier: str
+    lineno: int
+    type: Any = field(default="null")
+    
+    def accept(self, visitor):
+        visitor.postVisit(self)
+
+@dataclass
 class expression_new_instance:
     struct: Any
     params: Any

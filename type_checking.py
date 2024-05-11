@@ -287,7 +287,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         cn = t.__class__.__name__
         match cn:
             case "expression_integer":
-                print(val.info)
                 if t.integer >= self._get_value_of_binop(val.info[-2]) or t.integer < 0:
                     error_message("Type Checking",
                                   "Array index out of bounds.",
@@ -475,7 +474,12 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def _param_type_match(self, a, b, name):
         matches = 0
         i = 0
-        while i < len(a) and b and a[i][1] == self._get_type(b.exp):
+        while i < len(a) and b:
+            exp_type = self._get_type(b.exp)
+            if a[i][1] != exp_type:
+                if "null" != exp_type:
+                     break
+                b.exp.type = a[i][1] # if exp_type == null -> null expression set type of null expression to type of parameter
             b.param = a[i][0] # assigns given param to actual param
             matches += 1
             b = b.next
@@ -512,6 +516,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 t.type = self._current_scope.lookup(t.identifier).type
                 return t.type
             case "parameter_list":
+                  return t.type
+            case "expression_null":
                   return t.type
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)

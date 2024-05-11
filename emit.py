@@ -166,6 +166,8 @@ class Emit:
                     self._add("fprintf(stderr, \"Memory allocation failed.\");")
                     self.indent_level -= 1
                     self._add("}\n")
+                case Op.DEFAULTVAL:
+                    self._raw(self._generate_default_value(instr))
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 
@@ -226,3 +228,13 @@ class Emit:
         if temp == "bool":
             return "int" + self._get_stars(type)
         return type
+
+    def _generate_default_value(self, instr):
+        ptr = len(self._get_stars(instr.args)) > 0
+        match (instr.args[0]):
+            case "float":
+                return "0.0"
+            case "char":
+                return "'\\0'"
+            case _: # ints, bools, array pointers, struct pointers
+                return "0"

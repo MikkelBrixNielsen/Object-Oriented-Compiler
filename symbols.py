@@ -264,7 +264,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         cn = t.lhs.__class__.__name__
-        self._check_if_initialized(cn, t)
+        #self._check_if_initialized(cn, t)
         lhs = t.lhs
         if cn == "expression_attribute":
             lhs = t.lhs.inst
@@ -291,7 +291,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_statement_print(self, t):
         cn = t.exp.__class__.__name__
-        self._check_if_initialized(cn, t.exp)
+        #self._check_if_initialized(cn, t.exp)
         if cn == "expression_new_instance":
             error_message("Symbol Collection",
                           f"Object initialization not allowed in print statement",
@@ -310,15 +310,16 @@ class ASTSymbolVisitor(VisitorsBase):
                           f"Anonymous instantiation of class '{t.exp.struct}' not allowed.",
                           t.exp.lineno)
         elif cn == "expression_new_array":
-            print(t.exp)
             error_message("Symbol Collection",
                           f"Anonymous instantiation of '{t.exp.type}' array not allowed.",
                           t.exp.lineno)
         cn = t.exp.__class__.__name__
-        self._check_if_initialized(cn, t.exp)
+        #self._check_if_initialized(cn, t.exp)
         # Assigns the struct each expression relates to
         if t.next:
             t.next.struct = t.struct
+        if cn == "expression_null":
+            return
         # Assigns types to the parameters
         if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
             t.exp.type = self._current_scope.lookup(self._get_identifier(t.exp)).type
@@ -358,7 +359,7 @@ class ASTSymbolVisitor(VisitorsBase):
         elif t.type[-1:] == "*":
              error_message("Symobl Collection",
                           f"Array does not support user defiend type '{t.type[:-1]}'.",
-                          t.lineno)
+                          t.lineno)    
     # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
     # TODO - Make new syntax work to create class instances 
     # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace

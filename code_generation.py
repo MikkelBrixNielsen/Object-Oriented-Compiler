@@ -50,6 +50,7 @@ class Op(Enum):
     ALLOCSTART = auto()
     ALLOCEND = auto()
     MEMCHECK = auto()
+    DEFAULTVAL = auto()
 
 class Ins:
     """Representation of an instruction with an opcode, a number of
@@ -103,15 +104,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ASSIGN, ""))
         
     def midVisit_statement_assignment(self, t):
-        cn = t.rhs.__class__.__name__
-        if not cn == "expression_new_instance":
+        cnr = t.rhs.__class__.__name__
+        if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, ";"))
-        if  cn == "expression_new_array":
+        if  cnr == "expression_new_array":
             self._app(Ins(Op.MEMCHECK, "TEMP" + self._temp_lables["TEMP"]))
-        if isinstance(t.lhs , str) and not cn == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
+        if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.ASSIGN, t.lhs + self._lables[t.lhs]))
-        if t.lhs.__class__.__name__  == "expression_array_indexing":
+        cnl = t.lhs.__class__.__name__
+        if cnl  == "expression_array_indexing" or cnl == "expression_attribute":
             self._app(Ins(Op.INDENT))
         
     def postVisit_statement_assignment(self, t):
@@ -333,12 +335,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
             self._app(Ins(Op.RAW, var + "->" + t.field))
         else:
-            # FIXME - IT could be possible that it needed to go deeper than one level into the extensions to find the field
-            #
-            #
-            #
-            #
-            self._app(Ins(Op.RAW, var + "->" + cd.info[2][0].lower() + "->" + t.field))
+            s = ""
+            while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
+                ext = cd.info[2][0]
+                s = s + ext.lower() + self._comp_lables[ext.lower()] + "->"
+                cd = self._current_scope.lookup(ext)
+            self._app(Ins(Op.RAW, var + "->" + s + t.field))
 
     def preVisit_expression_method(self, t):
         prefix = ""
@@ -378,6 +380,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def postVisit_expression_array_indexing(self, t):
         self._app(Ins(Op.RAW, "]"))
+
+    def postVisit_expression_null(self, t):
+        self._app(Ins(Op.DEFAULTVAL, t.type))
 
 # auxies
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match

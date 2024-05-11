@@ -5,6 +5,16 @@ import interfacing_parser
 import AST
 from errors import error_message
 
+# Reserved keywords in C
+reserved_in_c = (
+    "auto",  "double", "int", "struct", "break", "else", "long", 
+    "switch", "case", "enum", "register", "typedef", "char",
+    "extern", "return", "union", "const", "float", "short", 
+    "unsigned", "continue", "for", "signed", "void", "default",
+    "goto", "sizeof", "volatile", "do", "if", "static", "while", 
+    "_Bool", "_Complex", "_Imaginary",
+)
+
 # LEXICAL UNITS
 reserved = {
     'if': 'IF',
@@ -24,11 +34,12 @@ reserved = {
     'char': 'CHAR',
     'array': 'ARRAY',
     'instanceOf': 'INSTANCEOF',
-    'extends': 'EXTENDS'
+    'extends': 'EXTENDS',
+    'Null': 'NULL',
 }
 
 tokens = (
-    'IDENT',
+    'IDENT', 
     'PLUS', 'MINUS', 'TIMES', 'DIVIDE',
     'LPAREN', 'RPAREN', 'LCURL', 'RCURL',
     'RBRAC', 'LBRAC',
@@ -77,6 +88,8 @@ def t_CHAR(t):
 
 def t_IDENT(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
+    if t.value in reserved_in_c and t.value not in reserved:
+          error_message("Lexical Analysis", f"Identifier '{t.value}' is a reserved keyword.", t.lexer.lineno)
     t.type = reserved.get(t.value, 'IDENT')    # Check for reserved words
     return t
 
@@ -468,7 +481,7 @@ def p_expression_new_array(t):
 #        t[0] = t[1]
 #    else:
 #        t[0] = t[3]
-    
+
 def p_expression_new_instance(t):
     'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN'
     t[0] = AST.expression_new_instance(t[2], t[4], t.lexer.lineno)
@@ -480,11 +493,17 @@ def p_optional_instance_expression_list(t):
 
 def p_instance_expression_list(t):
     '''instance_expression_list : expression
-                                | expression COMMA instance_expression_list'''
+                                | expression COMMA instance_expression_list
+                                | expression_null
+                                | expression_null COMMA instance_expression_list'''
     if len(t) == 2:
         t[0] = AST.instance_expression_list(t[1], None, t.lexer.lineno)
     else:
         t[0] = AST.instance_expression_list(t[1], t[3], t.lexer.lineno)
+
+def p_expression_null(t):
+    'expression_null : NULL'
+    t[0] = AST.expression_null(t[1], t.lexer.lineno)
 
 def p_expression_integer(t):
     'expression_integer : INT'
