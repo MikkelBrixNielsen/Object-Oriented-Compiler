@@ -68,6 +68,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._current_scope = None
         self._code = []
         self._lables = {}
+        self._temp_lables = {}
+        self._comp_lables = {}
 
     def _numgen(self):
         temp = int(self._counter) + 1
@@ -95,9 +97,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.VARLIST, t.variable + self._lables[t.variable], t.next, t.type))
 
     def preVisit_statement_assignment(self, t):
-        self._lables["TEMP"] = self._numgen()
+        self._temp_lables["TEMP"] = self._numgen()
         self._app(Ins(Op.TYPE, t.rhs.type))
-        self._app(Ins(Op.VARLIST, "TEMP" + self._lables["TEMP"], None, t.rhs.type))
+        self._app(Ins(Op.VARLIST, "TEMP" + self._temp_lables["TEMP"], None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
         
     def midVisit_statement_assignment(self, t):
@@ -105,7 +107,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if not cn == "expression_new_instance":
             self._app(Ins(Op.RAW, ";"))
         if  cn == "expression_new_array":
-            self._app(Ins(Op.MEMCHECK, "TEMP" + self._lables["TEMP"]))
+            self._app(Ins(Op.MEMCHECK, "TEMP" + self._temp_lables["TEMP"]))
         if isinstance(t.lhs , str) and not cn == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.ASSIGN, t.lhs + self._lables[t.lhs]))
@@ -118,7 +120,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if not isinstance(t.lhs , str):
             self._app(Ins(Op.ASSIGN, ''))
         if not cn == "expression_new_instance":
-            self._app(Ins(Op.RAW, "TEMP" + self._lables["TEMP"]))
+            self._app(Ins(Op.RAW, "TEMP" + self._temp_lables["TEMP"]))
             self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
@@ -196,8 +198,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.TYPE, t.type))
             temp = name
             if not name == "main":
-                self._lables[t.name] = self._numgen()
-                temp = name + self._lables[t.name]
+                self._comp_lables[t.name] = self._numgen()
+                temp = name + self._comp_lables[t.name]
             self._app(Ins(Op.START, " " + temp, t.type))
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, temp, t.par_list))
@@ -304,15 +306,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_expression_new_instance(self, t):
         self._current_scope = t.symbol_table
         self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
-        self._app(Ins(Op.MEMCHECK, "TEMP" + self._lables["TEMP"]))
+        self._app(Ins(Op.MEMCHECK, "TEMP" + self._temp_lables["TEMP"]))
         self._app(Ins(Op.INDENT))
-        self._app(Ins(Op.ASSIGN, t.identifier + self._lables[t.identifier]))
-        self._app(Ins(Op.RAW, "TEMP" + self._lables["TEMP"]))
+        identifier = t.identifier + self._lables[t.identifier] if t.identifier else ""
+        self._app(Ins(Op.ASSIGN, identifier))
+        self._app(Ins(Op.RAW, "TEMP" + self._temp_lables["TEMP"]))
         self._app(Ins(Op.RAW, ";"))
         self._extension_instance(t)
 
     def preVisit_instance_expression_list(self, t):
-        self._app(Ins(Op.ATTRASSIGN, t.struct + self._lables[t.struct], t.next, t.param))
+        struct = t.struct + self._lables[t.struct] 
+        self._app(Ins(Op.ATTRASSIGN, struct, t.next, t.param))
 
     def midVisit_instance_expression_list(self, t):
         self._app(Ins(Op.RAW, ";"))
@@ -329,12 +333,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
             self._app(Ins(Op.RAW, var + "->" + t.field))
         else:
+            # FIXME - IT could be possible that it needed to go deeper than one level into the extensions to find the field
+            #
+            #
+            #
+            #
             self._app(Ins(Op.RAW, var + "->" + cd.info[2][0].lower() + "->" + t.field))
 
     def preVisit_expression_method(self, t):
         prefix = ""
         inst_lable = ""
-        name_lable = self._lables[t.name]
+        name_lable = self._comp_lables[t.name]
         if not t.inst == "this":
             prefix = self._current_scope.lookup(t.inst).info[-1][:-1]
             inst_lable = self._lables[t.inst]
@@ -374,7 +383,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         current = self._current_scope.lookup(t.struct)
-        prev = t.identifier + self._lables[t.identifier]
+        prev = t.identifier + self._lables[t.identifier] if t.identifier else ""
         while len(current.info[2]) > 0: # There are more extensions to generate code for 
             name = current.info[2][0].lower()
             var = name + self._numgen()
@@ -387,7 +396,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
             # Assigns created struct to its parent class
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, prev + "->" + name + " = " + var))
+            self._app(Ins(Op.RAW, prev + "->" + name + self._comp_lables[name] + " = " + var))
             self._app(Ins(Op.RAW, ";"))
             
             # Instanciate all attributeds for the new instance 
@@ -395,12 +404,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             for attr in super.info[0]:
                 self._app(Ins(Op.INDENT))
                 self._app(Ins(Op.ASSIGN, var + "->" + attr[0]))
-                if attr[1] == "int" or attr[1][-2:] == "[]" or attr[0] == "bool":
+                if attr[1] == "int" or attr[1][-2:] == "[]" or attr[1] == "bool":
                     self._app(Ins(Op.RAW, "0"))
                 elif attr[1] == "float":
                     self._app(Ins(Op.RAW, "0.0"))
                 elif attr[1] == "char":
-                    self._app(Ins(Op.RAW, "''"))
+                    self._app(Ins(Op.RAW, "'\\0'"))
                 elif attr[1][-1] == "*":
                     ins1 = self._code.pop()
                     ins2 = self._code.pop()
@@ -427,8 +436,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         cd = self._current_scope.lookup(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
             for ext in cd.info[2]:
+                name = ext.lower()
                 self._app(Ins(Op.TYPE, ext))
-                self._app(Ins(Op.VARLIST, "*" + ext.lower(), None, None))
+                self._comp_lables[name] = self._numgen()
+                self._app(Ins(Op.VARLIST, "*" + name + self._comp_lables[name], None, None))
                 self._app(Ins(Op.RAW, ";"))
                 pass
         self._app(Ins(Op.CLASSMID, t.name))
@@ -436,16 +447,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             for member in cd.info[3]: # where the additions are located
                 if len(member) >= 3: # method
                     self._app(Ins(Op.TYPE, member[1]))
-                    self._app(Ins(Op.START, " " + t.name + "_" + member[0] + self._lables[member[0]], member[1]))
+                    self._app(Ins(Op.START, " " + t.name + "_" + member[0] + self._comp_lables[member[0]], member[1]))
                     self._app(Ins(Op.PARAMS, t.name, "*this", None))
                     self._app(Ins(Op.PREMID))
                     self._app(Ins(Op.IDTL_P))
                     self._app(Ins(Op.RET))
-                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + member[0] + self._lables[member[0]] + "(this->" + cd.info[2][0].lower() + ")"))
+                    name = cd.info[2][0].lower()
+                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + member[0] + self._comp_lables[member[0]] + "(this->" + name + self._comp_lables[name] + ")"))
                     self._app(Ins(Op.RAW, ";"))
                     self._app(Ins(Op.IDTL_M))
                     self._app(Ins(Op.END))
-                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0] + self._lables[member[0]], AST.parameter_list(t.name, "*this", None, t.lineno)))
+                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + member[0] + self._comp_lables[member[0]], AST.parameter_list(t.name, "*this", None, t.lineno)))
 
     def _is_member_in_tuple_list(self, m, tl):
         for member in tl:

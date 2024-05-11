@@ -177,7 +177,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Identifier {t.struct} is not a class.",
                           t.lineno)
-        self._parameter_check("constructor for " + t.struct, t.params, value, t.lineno)
+        self._parameter_check(t.struct, t.params, value, t.lineno)
 
     def postVisit_expression_attribute(self, t):
         self._exist_membership(t, "attribute")
@@ -472,10 +472,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             current = current.next
         return num_params
     
-    def _param_type_match(self, a, b):
+    def _param_type_match(self, a, b, name):
         matches = 0
         i = 0
-        while i < len(a) and b and a[i][1] == b.exp.type:
+        while i < len(a) and b and a[i][1] == self._get_type(b.exp):
             b.param = a[i][0] # assigns given param to actual param
             matches += 1
             b = b.next
@@ -568,8 +568,9 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 break # if member found stop looking or no more extension to look through 
             desc = self._current_scope.lookup(desc.info[2][0])
         if not field:
+            field = t.field if cat == "attribute" else t.name
             error_message("Type Checking",
-                          f"Identifier '{t.field}' not found.",
+                          f"Identifier '{field}' not found.",
                           t.lineno)
         return field
         
@@ -584,13 +585,13 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         num_actual_params = len(value.info[0])
         if num_actual_params < num_given_params:
             error_message("Type Checking",
-                          f"call to {name} made with too many argumnets.",
+                          f"call to constructor for {name} made with too many argumnets.",
                           lineno)
         elif num_actual_params > num_given_params:
             error_message("Type Checking",
-                          f"call to {name} made with too few arguments.",
+                          f"call to constructor for {name} made with too few arguments.",
                           lineno)
-        elif not self._param_type_match(value.info[0], params):
+        elif not self._param_type_match(value.info[0], params, name):
             error_message("Type Checking",
                           f"Type of parameters given does not match parameters needed.",
                           lineno) 

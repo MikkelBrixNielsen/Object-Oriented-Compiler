@@ -99,11 +99,15 @@ class ASTSymbolVisitor(VisitorsBase):
                     "Symbol Collection",
                     f"Redeclaration of function '{t.name}' in the same scope.",
                     t.lineno)
-            if not t.body.variables_decl and not t.body.functions_decl and not t.body.stm_list:
-                error_message(
-                    "Symbol Collection",
-                    f"The body of the function '{t.name}' is empty.",
-                    t.lineno)
+            if not t.body.stm_list:
+                if not t.body.variables_decl and not t.body.functions_decl: 
+                    error_message("Symbol Collection", 
+                                  f"The body of the function '{t.name}' is empty.",
+                                  t.lineno)
+                error_message("Symbol Collection", 
+                              f"Missing return statement in function '{t.name}'.",
+                              t.lineno)
+
             current = t.body.stm_list
             while current.next:
                 current = current.next
@@ -257,6 +261,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         cn = t.lhs.__class__.__name__
+        self._check_if_initialized(cn, t)
         lhs = t.lhs
         if cn == "expression_attribute":
             lhs = t.lhs.inst
@@ -281,6 +286,14 @@ class ASTSymbolVisitor(VisitorsBase):
         cn = t.exp.__class__.__name__
         self._check_if_initialized(cn, t.exp)
 
+    def preVisit_statement_print(self, t):
+        cn = t.exp.__class__.__name__
+        self._check_if_initialized(cn, t.exp)
+        if cn == "expression_new_instance":
+            error_message("Symbol Collection",
+                          f"Object initialization not allowed in print statement",
+                          t.lineno)
+
     def preVisit_expression_new_instance(self, t):
         t.symbol_table = self._current_scope # adds sym_table to instances
         if t.params:
@@ -288,12 +301,24 @@ class ASTSymbolVisitor(VisitorsBase):
 
     # FIXME - Assigning type to parameters might need more complex logic to correctly identify the differet type of parameters there exit and giving them the correct type
     def preVisit_instance_expression_list(self, t):
+        cn = t.exp.__class__.__name__
+        if cn == "expression_new_instance":
+            error_message("Symbol Collection",
+                          f"Anonymous instantiation of class '{t.exp.struct}' not allowed.",
+                          t.exp.lineno)
+        elif cn == "expression_new_array":
+            print(t.exp)
+            error_message("Symbol Collection",
+                          f"Anonymous instantiation of '{t.exp.type}' array not allowed.",
+                          t.exp.lineno)
+        cn = t.exp.__class__.__name__
+        self._check_if_initialized(cn, t.exp)
         # Assigns the struct each expression relates to
         if t.next:
             t.next.struct = t.struct
         # Assigns types to the parameters
-        if hasattr(t.exp, 'identifier'):
-            t.exp.type = self._current_scope.lookup(t.exp.identifier).type
+        if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
+            t.exp.type = self._current_scope.lookup(self._get_identifier(t.exp)).type
 
     def preVisit_array_list(self, t):
         if t.name: # the array is an attribute on a class if it has a name
@@ -373,29 +398,25 @@ class ASTSymbolVisitor(VisitorsBase):
     
     def _check_if_initialized(self, cn, t):
         if (not cn == "expression_integer" and not cn == "expression_float" and 
-            not cn == "expression_bool" and not cn == "expression_char" and
-            not cn == "expression_call" and not cn == "expression_method"):
-            #Imposes a restriction as to not return a variabl defined locally to a function unless its a premitive type 
-            #if cn == "expression_identifier":
-                #val = self._current_scope.lookup_this_scope(t.identifier)
-                #if val and not val.cat == NameCategory.PARAMETER and val.type not in ["int", "float", "bool", "char"]:
-                #    error_message("Symbol Collection",
-                #                  f"Returning local variable '{t.identifier}'.",
-                #                  t.lineno)
+            not cn == "expression_boolean" and not cn == "expression_char"):
             ident = self._get_identifier(t)
             val = None
-            if cn == "expression_binop":
+            if cn == "expression_binop" or cn == "statement_assignment":
                 self._check_if_initialized(t.lhs.__class__.__name__, t.lhs)
                 self._check_if_initialized(t.rhs.__class__.__name__, t.rhs)
                 # if neither of lsh or rhs fails the initialization check then
                 # there exists a value
                 val = True
-            elif (cn == "expression_method" or cn == "expression_attribute"):
+            elif cn == "expression_method" or cn == "expression_attribute":
                 val = self._current_scope.lookup(t.inst)
                 if t.inst == "this":
                     val = True
+            elif cn == "expression_new_instance" or cn == "expression_new_array":
+                val = True
+            elif cn in ["str", "int", "float", "char", "bool"]:
+                val = True
             else:
-                val = self._current_scope.lookup_this_scope(ident)
+                val = self._current_scope.lookup(ident)
             if not val:
                 error_message("Symbol Collection",
                                 f"Accessing variable before initialization.",
@@ -415,6 +436,8 @@ class ASTSymbolVisitor(VisitorsBase):
                 return t.name
             case "expression_binop":
                 return (self._get_identifier(t.lhs), self._get_identifier(t.rhs))
+            case "statement_assignment":
+                return(t.lhs if isinstance(t.lhs, str) else self._get_identifier(t.lhs), self._get_identifier(t.rhs))
             case "expression_attribute":
                 return t.field
             case "expression_new_instance" | "expression_new_array":
