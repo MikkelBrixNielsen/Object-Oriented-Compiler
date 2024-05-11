@@ -149,12 +149,16 @@ class Emit:
                 case Op.RAW:
                     self._raw(str(instr.args[0]))
                 case Op.ALLOC:
-                    self._raw(f"({instr.args[0]})malloc(sizeof({instr.args[1]}));")
+                    arg1 = self._is_bool_then_convert_to_int(instr.args[0])
+                    arg2 = self._is_bool_then_convert_to_int(instr.args[1])
+                    self._raw(f"({arg1})malloc(sizeof({arg2}));")
                 case Op.ALLOCSTART:
                     type = instr.args[0].replace("[]", "*")
+                    type = self._is_bool_then_convert_to_int(type)
                     self._raw(f"({type})malloc((")
                 case Op.ALLOCEND:
                     type = instr.args[0].replace("[]", "*")
+                    type = self._is_bool_then_convert_to_int(type)
                     self._raw(f")*sizeof({type}))")
                 case Op.MEMCHECK:
                     self._add(f"if ({instr.args[0]} == NULL)" + " {\n")
@@ -216,3 +220,9 @@ class Emit:
 
     def _get_stars(self, type):
         return (len(str(type).replace("[]", "*").split("*")) - 1) * "*"
+    
+    def _is_bool_then_convert_to_int(self, type):
+        temp = str(type).replace("[]", "").replace("*", "")
+        if temp == "bool":
+            return "int" + self._get_stars(type)
+        return type

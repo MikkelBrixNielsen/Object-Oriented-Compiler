@@ -227,11 +227,14 @@ class ASTSymbolVisitor(VisitorsBase):
         t.decl.type = t.type
         if t.next:
             t.next.name = t.name
-    
-    def postVisit_attributes_declaration_list(self, t):
-        if hasattr(t.decl, "exp"):
-            if hasattr(t.decl.exp, "size"):
-                self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
+
+    # FIXME - (MIGHT BE) useless code that can just be deleted since arrays in classes are just pointers now 
+    # so no size is needed and therefore no point in checking whether its is static since the array will be 
+    # dynamically allocated later anyway if it is ever initialized.
+    #def postVisit_attributes_declaration_list(self, t):
+    #    if hasattr(t.decl, "exp"):
+    #        if hasattr(t.decl.exp, "size"):
+    #            self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
 
     def preVisit_attributes_list(self, t):
         if t.next:
@@ -404,7 +407,7 @@ class ASTSymbolVisitor(VisitorsBase):
             if cn == "expression_binop" or cn == "statement_assignment":
                 self._check_if_initialized(t.lhs.__class__.__name__, t.lhs)
                 self._check_if_initialized(t.rhs.__class__.__name__, t.rhs)
-                # if neither of lsh or rhs fails the initialization check then
+                # if neither of lhs or rhs fails the initialization check then
                 # there exists a value
                 val = True
             elif cn == "expression_method" or cn == "expression_attribute":
