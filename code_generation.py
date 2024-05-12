@@ -105,7 +105,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     # creates and enters a new scope
     def _enter_new_scope(self, t):
-        print(f"entering the scope for '{t.name}'")
         self._current_scope = t.symbol_table
         self._lables = LableTable(self._lables)
         self._temp_lables = LableTable(self._temp_lables)
@@ -113,7 +112,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     
     # exits the current scope and goes to parent scope
     def _exit_current_scope(self, t):
-        print(f"exitting the scope for '{t.name}'")
         self._current_scope = self._current_scope.parent
         self._lables = self._lables.parent
         self._temp_lables = self._temp_lables.parent
@@ -123,6 +121,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._code.append(instruction)
 
     def preVisit_variables_declaration_list(self, t):
+        print(t.type)
         self._app(Ins(Op.TYPE, t.decl.type))        
 
     def midVisit_variables_declaration_list(self, t):
@@ -393,9 +392,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
 
-    def preVisit_array_list(self, t):
-        s = " " + self._lables.lookup(t.variable)
-        self._app(Ins(Op.ASSIGN, s))
+    #def preVisit_array_list(self, t):
+    #    s = " " + self._lables.lookup(t.variable)
+    #    self._app(Ins(Op.ASSIGN, s))
     
     def preVisit_expression_new_array(self, t):
         self._app(Ins(Op.ALLOCSTART, t.type))

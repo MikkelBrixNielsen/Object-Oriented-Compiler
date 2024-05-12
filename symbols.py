@@ -2,6 +2,8 @@ from enum import Enum, auto
 from errors import error_message
 from visitors_base import VisitorsBase
 
+PRIM_TYPES = ["int", "float", "bool", "char"]
+
 class NameCategory(Enum):
     """Categories for the names (symbols) collected and inserted into
        the symbol table.
@@ -92,6 +94,7 @@ class ASTSymbolVisitor(VisitorsBase):
         t.number_of_variables = self.variable_offset
 
     def preVisit_function(self, t):
+        self._check_if_user_type_exists(t.type, t.lineno)
         if self._current_level >= 0: # in global scope or deeper
             if self._current_scope.lookup_this_scope(t.name):
                 error_message(
@@ -128,7 +131,7 @@ class ASTSymbolVisitor(VisitorsBase):
         self._current_scope = SymbolTable(self._current_scope)
         # Saving the current symbol table in the AST for future use:
         t.symbol_table = self._current_scope
-        # if function belongs to a class add reference to itself
+        # if function belongs to a class add reference its scope
         if t.__class__.__name__ == "method":
             self._current_scope.insert(
                 NameCategory.THIS, SymVal(t.parent, t.parent+"*", self._current_level, []))
@@ -165,6 +168,7 @@ class ASTSymbolVisitor(VisitorsBase):
         t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
+        self._check_if_user_type_exists(t.type, t.lineno)
         # if variables_list has a next pass along its type
         if t.next: 
             t.next.type = t.type
@@ -198,6 +202,9 @@ class ASTSymbolVisitor(VisitorsBase):
         # descriptor of the class belongs to the inner scope:
         self._current_level += 1
         self._current_scope = SymbolTable(self._current_scope)
+        # add reference to self
+        self._current_scope.insert(
+                NameCategory.THIS, SymVal(t.name, t.name+"*", self._current_level, []))
         # Saving the current symbol table in the AST for future use:
         t.symbol_table = self._current_scope
         t.scope_level = self._current_level
@@ -224,6 +231,7 @@ class ASTSymbolVisitor(VisitorsBase):
             t.methods.parent = t.name
 
     def preVisit_attributes_declaration_list(self, t):
+        self._check_if_user_type_exists(t.type, t.lineno)
         t.decl.name = t.name
         t.decl.type = t.type
         if t.next:
@@ -241,7 +249,6 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.next:
             t.next.name = t.name 
             t.next.type = t.type
-
         value = self._current_scope.lookup(t.name)
         value.info[0].append((t.variable, t.type))
         self._record_variables(t, NameCategory.ATTRIBUTE, t.name)
@@ -252,7 +259,10 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.parent = t.parent
 
     def preVisit_method(self, t):
-        t.par_list.type = t.parent + "*" # sets the reference to the class it belongs to
+        self._check_if_user_type_exists(t.type, t.lineno)
+        this = self._current_scope.lookup(NameCategory.THIS)
+        t.parent = this.cat
+        t.par_list.type = this.type
         self.preVisit_function(t)
         value = self._current_scope.lookup(t.parent)
         value.info[1].append((t.name, t.type, t))
@@ -325,11 +335,11 @@ class ASTSymbolVisitor(VisitorsBase):
         if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
             t.exp.type = self._current_scope.lookup(self._get_identifier(t.exp)).type
 
-    def preVisit_array_list(self, t):
-        if t.name: # the array is an attribute on a class if it has a name
-            value = self._current_scope.lookup(t.name)
-            value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
+    #def preVisit_array_list(self, t):
+    #    if t.name: # the array is an attribute on a class if it has a name
+    #        value = self._current_scope.lookup(t.name)
+    #        value.info[0].append((t.variable, t.type))
+    #    self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
 
     def postVisit_expression_array_indexing(self, t):
         val = self._current_scope.lookup(t.identifier)
@@ -357,10 +367,10 @@ class ASTSymbolVisitor(VisitorsBase):
              error_message("Symobl Collection",
                           f"Array access using result of creating new array not allowed.",
                           t.lineno)
-        elif t.type[-1:] == "*":
-             error_message("Symobl Collection",
-                          f"Array does not support user defiend type '{t.type[:-1]}'.",
-                          t.lineno)    
+        #elif t.type[-1:] == "*":
+        #     error_message("Symobl Collection",
+        #                  f"Array does not support user defiend type '{t.type[:-1]}'.",
+        #                  t.lineno)    
     # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
     # TODO - Make new syntax work to create class instances 
     # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
@@ -464,3 +474,11 @@ class ASTSymbolVisitor(VisitorsBase):
                 error_message("Symbol Collection",
                               "variable-sized parameters cannot be used to initialize arrays in classes.",
                               lineno)
+                
+    # check whether the type of the             
+    def _check_if_user_type_exists(self, type, lineno):
+        base_type = type.replace("[]", "").replace("*", "")
+        if base_type not in PRIM_TYPES and not self._current_scope.lookup(base_type):
+            error_message("Symbol Collection",
+                          f"Type or class '{base_type}' not defined.",
+                          lineno)

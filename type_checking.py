@@ -136,6 +136,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_call(self, t):
         value = self._current_scope.lookup(t.name)
         node = value.info
+        print(value.info.number_of_parameters)
         if self.number_of_actual_parameters[-1] < node.number_of_parameters:
             error_message("Type Checking",
                           f"'{t.name}' was called with too few parameters.",
@@ -204,11 +205,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_group(self, t):
         t.type = t.exp.type
 
-    def preVisit_array_list(self, t):
-        if not str(t.type[:-2]) == t.exp.type:
-            error_message("Type Checking",
-                          f"Type mismatch assigning array of type {t.exp.type} to array of type {t.type}.",
-                          t.lineno)
+    #def preVisit_array_list(self, t):
+    #    if not str(t.type[:-2]) == t.exp.type:
+    #        error_message("Type Checking",
+    #                      f"Type mismatch assigning array of type {t.exp.type} to array of type {t.type}.",
+    #                      t.lineno)
             
     def postVisit_array_list(self, t):
         val = self._current_scope.lookup(t.variable)

@@ -192,13 +192,14 @@ def p_variables_declaration_list(t):
                                   | FT variables_list SEMICOL variables_declaration_list'''
                                   #| array_list SEMICOL
                                   #| array_list SEMICOL variables_declaration_list'''
-    if len(t) == 3:
-        t[0] = AST.variables_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
-    elif len(t) == 4:
-        if not t[1].__class__.__name__ == "array_list":
-            t[0] = AST.variables_declaration_list(t[1], t[2], None, t.lexer.lineno)
-        else:
-            t[0] = AST.variables_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
+    #if len(t) == 3:
+    #   t[0] = AST.variables_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
+    #elif if len(t) == 4:
+    if len(t) == 4:
+        #if not t[1].__class__.__name__ == "array_list":
+        t[0] = AST.variables_declaration_list(t[1], t[2], None, t.lexer.lineno)
+        #else:
+            #t[0] = AST.variables_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
     else:
         t[0] = AST.variables_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
 
@@ -276,7 +277,7 @@ def p_class_descriptor(t):
 
 def p_optional_attributes_declaration_list(t):
     '''optional_attributes_declaration_list : empty
-                                            | attributes_declaration_list'''
+                                            | attributes_declaration_list '''
     t[0] = t[1]
 
 def p_attributes_declaration_list(t):
@@ -284,13 +285,14 @@ def p_attributes_declaration_list(t):
                                    | FT attributes_list SEMICOL attributes_declaration_list'''
                                    #| array_list SEMICOL
                                    #| array_list SEMICOL attributes_declaration_list'''
-    if len(t) == 3:
-        t[0] = AST.attributes_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
-    elif len(t) == 4:
-        if not t[1].__class__.__name__ == "array_list":
-            t[0] = AST.attributes_declaration_list(t[1], t[2], None, t.lexer.lineno)
-        else:
-            t[0] = AST.attributes_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
+    #if len(t) == 3:
+    #    t[0] = AST.attributes_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
+    #elif len(t) == 4:
+    if len(t) == 4:
+        #if not t[1].__class__.__name__ == "array_list":
+        t[0] = AST.attributes_declaration_list(t[1], t[2], None, t.lexer.lineno)
+        #else:
+        #    t[0] = AST.attributes_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
     else:
         t[0] = AST.attributes_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
 
