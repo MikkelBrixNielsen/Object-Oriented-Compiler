@@ -53,36 +53,37 @@ class Op(Enum):
     DEFAULTVAL = auto()
 
 class LableTable:
+    _counter = "0000"
     def __init__(self, parent):
-        self._counter = "0000"
         self._tab = {}
         self.parent = parent
 
     # Inserts lables into table for the give name
     # and returns name with lable
     def insert(self, name):
-        self._tab[name] = self._numgen()
-        return name + self._numgen()
+        lable = self._numgen()
+        self._tab[name] = lable
+        return name + lable
 
     # Finds the lable corresponding to name if any exist
-    # and return name with lable
+    # it returns name with lable otherwise returns name
     def lookup(self, name):
         if name in self._tab:
             return name + self._tab[name]
         elif self.parent:
             return self.parent.lookup(name)
         else:
-            return None
+            return name
         
     # Generates the numbers for the lables 
     def _numgen(self):
-        temp = int(self._counter) + 1
+        temp = int(LableTable._counter) + 1
         counter = 0
         while temp > 0:
             temp = temp // 10
             counter = counter + 1
-        self._counter = "0"*(4-counter) + str(int(self._counter) + 1)
-        return "_" + self._counter
+        LableTable._counter = "0"*(4-counter) + str(int(LableTable._counter) + 1)
+        return "_" + LableTable._counter
 
 class Ins:
     def __init__(self, *args, c=""):
@@ -102,6 +103,22 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def get_code(self):
         return self._code
 
+    # creates and enters a new scope
+    def _enter_new_scope(self, t):
+        print(f"entering the scope for '{t.name}'")
+        self._current_scope = t.symbol_table
+        self._lables = LableTable(self._lables)
+        self._temp_lables = LableTable(self._temp_lables)
+        self._comp_lables = LableTable(self._comp_lables)
+    
+    # exits the current scope and goes to parent scope
+    def _exit_current_scope(self, t):
+        print(f"exitting the scope for '{t.name}'")
+        self._current_scope = self._current_scope.parent
+        self._lables = self._lables.parent
+        self._temp_lables = self._temp_lables.parent
+        self._comp_lables = self._comp_lables.parent
+
     def _app(self, instruction):
         self._code.append(instruction)
 
@@ -116,7 +133,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         self._app(Ins(Op.TYPE, t.rhs.type))
-        self._app(Ins(Op.VARLIST, self._temp_lables.insert(["TEMP"]), None, t.rhs.type))
+        self._app(Ins(Op.VARLIST, self._temp_lables.insert("TEMP"), None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
         
     def midVisit_statement_assignment(self, t):
@@ -211,16 +228,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_method(self, t):
         name = t.parent + "_" + t.name
-        self._current_scope = t.symbol_table
-        if not t.name == "global":
-            self._app(Ins(Op.TYPE, t.type))
-            temp = name
-            if not name == "main":
-                temp = self._comp_lables.insert(t.name)
-            self._app(Ins(Op.START, " " + temp, t.type))
-            self._app(Ins(Op.IDTL_P))
-            self._app(Ins(Op.SIGNATURE, t.type, temp, t.par_list))
+        self._app(Ins(Op.TYPE, t.type))
+        labelled_name = t.parent + "_" + self._comp_lables.insert(t.name)
+        self._app(Ins(Op.START, " " + labelled_name, t.type))
+        self._app(Ins(Op.IDTL_P))
+        self._app(Ins(Op.SIGNATURE, t.type, labelled_name, t.par_list))
         t.name = name
+        self._enter_new_scope(t)
     
     def midVisit_method(self, t):
         self.midVisit_function(t)
@@ -241,25 +255,25 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, self._lables.lookup(t.identifier)))
 
     def preVisit_function(self, t):
-        self._current_scope = t.symbol_table
-        if not t.name == "global":
+        if t.scope_level > 0: # functions defined instide the global scope (so all functions excluding the implicit function for global scope)
             name = t.name
             self._app(Ins(Op.TYPE, t.type))
-            if not t.name == "main":
+            if not t.name == "main" or t.scope_level > 1:
                 name = self._lables.insert(t.name)
             self._app(Ins(Op.START, " " + name, t.type))
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, name, t.par_list))
+        self._enter_new_scope(t)
     
     def midVisit_function(self, t):
-        if not t.name == "global":
+        if t.name != "global" or t.scope_level > 1:
             self._app(Ins(Op.PREMID))
 
     def postVisit_function(self, t):
-        if not t.name == "global":
+        self._exit_current_scope(t)
+        if t.name != "global" or t.scope_level > 1:
             self._app(Ins(Op.IDTL_M))
             self._app(Ins(Op.END))
-        self._current_scope = self._current_scope.parent
 
     def preVisit_parameter_list(self, t):
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
@@ -320,7 +334,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 self._app(Ins(Op.GTE))
 
     def preVisit_expression_new_instance(self, t):
-        self._current_scope = t.symbol_table
         self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
         self._app(Ins(Op.MEMCHECK, self._temp_lables.lookup("TEMP")))
         self._app(Ins(Op.INDENT))
@@ -329,6 +342,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, self._temp_lables.lookup("TEMP")))
         self._app(Ins(Op.RAW, ";"))
         self._extension_instance(t)
+        self._enter_new_scope(t)
 
     def preVisit_instance_expression_list(self, t):
         struct = self._lables.lookup(t.struct) 

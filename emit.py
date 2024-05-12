@@ -106,7 +106,7 @@ class Emit:
                 case Op.PARAMS:
                     self._addParam(instr)
                 case Op.ASSIGN:
-                    self._raw(instr.args[0] + " = ")
+                    self._raw(f"{instr.args[0]} = ")
                 case Op.ATTRASSIGN:
                     self._add(f"{instr.args[0]}->{instr.args[2]} = ")
                 case Op.THIS:
@@ -127,14 +127,15 @@ class Emit:
                     self._raw(s)
                 case Op.START:
                     stars = self._get_stars(instr.args[1])
-                    s = instr.args[0]
+                    s = str(instr.args[0])
                     if len(stars) > 0:
                         s = " " + stars + instr.args[0].strip()
-                    self._add(s + "(")
+                    s = s + "("
+                    self._raw(s) if instr.args[-1] else self._add(s)
                 case Op.PREMID:
                     self._raw(") {\n")
                 case Op.MID:
-                    self._add("} " + instr.args[0] + " {\n")
+                    self._add("} " + str(instr.args[0]) + " {\n")
                 case Op.END:
                     self._add("}\n\n")
                 case Op.RET:

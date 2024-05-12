@@ -74,15 +74,15 @@ class ASTSymbolVisitor(VisitorsBase):
         func = t.main_function
         if func.name != "main":
             error_message("Symbol Collection", 
-                          f"missing function {'main'} - please define as first function.",
+                          f"Missing function {'main'} - please define as first function.",
                           t.lineno)
         elif func.type != "int":
             error_message("Symbol Collection",
-                          f"main function is not of type 'int' but is of type 'float'",
+                          f"Function 'main' is not of type 'int' but is of type '{t.type}'",
                           t.lineno)
         elif func.par_list != None:
             error_message("Symbol Collection",
-                          f"parameter list not empty",
+                          f"Function 'main' has non-empty parameter list.",
                           t.lineno)
         # Preparing for processing local variables:
         self.variable_offset = 0
@@ -92,8 +92,7 @@ class ASTSymbolVisitor(VisitorsBase):
         t.number_of_variables = self.variable_offset
 
     def preVisit_function(self, t):
-        # The name of the function belongs to the surrounding scope:
-        if t.name != "global":
+        if self._current_level >= 0: # in global scope or deeper
             if self._current_scope.lookup_this_scope(t.name):
                 error_message(
                     "Symbol Collection",
@@ -113,21 +112,23 @@ class ASTSymbolVisitor(VisitorsBase):
                 current = current.next
             if not current.stm.__class__.__name__ == "statement_return":
                 error_message("Symbol Collection", 
-                              f"Missing return statement in function.",
+                              f"Missing return statement in function '{t.name}'.",
                               t.lineno)
             exp = current.stm.exp.__class__.__name__
             if exp == "expression_new_array" or "expression_new_instance" == exp:
                 error_message("Symnol Collection",
-                              f"Object instantiation not allowed as return value.",
+                              f"Object instantiation not allowed as return value in function '{t.name}'.",
                               t.lineno)
                 
             self._current_scope.insert(
                 t.name, SymVal(NameCategory.FUNCTION, t.type, self._current_level, t))
+            
         # Parameters and the body of the function belongs to the inner scope:
         self._current_level += 1
         self._current_scope = SymbolTable(self._current_scope)
         # Saving the current symbol table in the AST for future use:
         t.symbol_table = self._current_scope
+        # if function belongs to a class add reference to itself
         if t.__class__.__name__ == "method":
             self._current_scope.insert(
                 NameCategory.THIS, SymVal(t.parent, t.parent+"*", self._current_level, []))
@@ -423,7 +424,7 @@ class ASTSymbolVisitor(VisitorsBase):
                 val = self._current_scope.lookup(ident)
             if not val:
                 error_message("Symbol Collection",
-                                f"Accessing variable before initialization.",
+                                f"Accessing variable / function before initialization.",
                                 t.lineno)
 
     def _get_identifier(self, t):
