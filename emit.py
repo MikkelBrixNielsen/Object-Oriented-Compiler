@@ -1,6 +1,3 @@
-
-# This module takes the intermediate code and outputs C code.
-
 from code_generation import Op
 
 _intermediate_to_C = {

@@ -348,12 +348,12 @@ class statement_list:
 
 @dataclass
 class assignment_list:
-    ass: Any
+    stm: Any
     next: Any
     lineno: int
 
     def accept(self, visitor):
-        self.ass.accept(visitor)
+        self.stm.accept(visitor)
         if self.next:
             self.next.accept(visitor)
 

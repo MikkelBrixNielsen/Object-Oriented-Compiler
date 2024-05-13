@@ -1,7 +1,6 @@
 from enum import Enum, auto
-from singleton_decorator import singleton
 from visitors_base import VisitorsBase
-from symbols import NameCategory, PRIM_TYPES
+from symbols import NameCategory, PRIM_TYPES, _get_identifier
 import AST
 
 class Op(Enum):
@@ -265,13 +264,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._enter_new_scope(t)
     
     def midVisit_function(self, t):
-        if t.name != "global" or t.scope_level > 1:
+        if t.name != "global" or t.scope_level > 0:
             self._app(Ins(Op.PREMID))
 
     def postVisit_function(self, t):
         self._cleanup(t)
         self._exit_current_scope(t)
-        if t.name != "global" or t.scope_level > 1:
+        if t.name != "global" or t.scope_level > 0:
             self._app(Ins(Op.IDTL_M))
             self._app(Ins(Op.END))
 
@@ -497,30 +496,71 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         return False
     
     def _cleanup(self, t):
+        if not t.name == "global" or t.scope_level > 0: # clean up for all other user defined functions
+            # finds and frees variables in the scope for the current function
+            self._find_and_free_in(t.body.stm_list)
+        else: # clean up for the global scope encapsulating everything
+            self._find_and_free_in(t.body.assignment_list)
+
+    def _find_and_free_in(self, list):
+        # Delete the comment bellow if the code to find all variables is deleted 
         # Collects all variables defined in the function
         collected_vars = {}
-        if not t.name == "global" or t.scope_level > 1:
-            var = t.body.variables_decl
-            while var: 
-                # do all the things have type???
-                if not (var.type in PRIM_TYPES):
-                        collected_vars[var.decl.variable] = False                            
-                var = var.next
-            # looks through statements to see what collected variables are assigned 
-            stm = t.body.stm_list
-            while stm:
-                # create a way to get the identifier of a give lhs of a statement
-                # collected_vars[stm.identifier] = True 
-                stm = t.body.stm_list.next
+        # useless code we don't need to collect all variables
+        # just collect the once which are assigne something that
+        # is not a primitive type
+        #decl = t.body.variables_decl
+        #while decl:
+        #    var = decl.decl
+        #    while var:    
+        #        # FIXME - CHECK: do all the things have type???
+        #        if not (var.type in PRIM_TYPES):
+        #                collected_vars[var.variable] = False
+        #        var = var.next                         
+        #    decl = decl.next
+        # looks through statements to see what collected variables are assigned 
+        stm = list
+        #print(collected_vars, t.name, "START")
+        while stm:
+            if stm.stm.__class__.__name__ == "statement_assignment":
+                val = self._current_scope.lookup_this_scope(stm.stm.lhs) # only looks for variables in the current function scope  
+                if val and val.type not in PRIM_TYPES and val.cat != NameCategory.PARAMETER: # primitive types and parameters should not be freed
+                    collected_vars[_get_identifier(stm.stm)[0]] = True # _get_identifier(stm.stm)[0] is lhs for statement_assignment 
+            stm = stm.next
+        #print(collected_vars, t.name, "END")
+        # looks through all statemnts and finds all returns statements
+        # and places free statements before it
+        stm = list
+        while stm:
+            # FIXME - does not look into sub trees of any given statement
+            # only look at whether the current statment is a return statement
+            # it should also look if e.g. a if_then_else statement has a return
+            # or a while_statement etc.
+            if stm.stm.__class__.__name__ == "statement_return":
+                ins = self._remove_return_instructions()
+                self._free_list(collected_vars)
+                self._add_return_instreuctions(ins)
+            stm = stm.next
 
-            # if the flag for a given key is set meaning it has been assigned something 
-            # that has been allocated then it should be freed
-            for key, flag in collected_vars.items():
-                if flag:
-                    self.app(Ins(Op.FREE, key))
+    def _free_list(self, collected_vars):
+        # if the flag for a given key is set meaning it has been assigned something 
+        # that has been allocated then it should be freed
+        for key, flag in collected_vars.items():
+            if flag:
+                self._app(Ins(Op.FREE, key))
+        
+    # removes instructions associated with return statement
+    def _remove_return_instructions(self):
+        ins = []
+        current = self._code.pop()
+        while current:
+            ins.append(current)
+            if current.opcode == Op.RET:
+                break
+            current = self._code.pop()
+        return ins[::-1] # reverse the instruction to get them in the order which they should be put back
 
-
-
-
-
-
+    # Puts the instructions for return statement back into the code after the free statements
+    # ins must be the result from callign _remove_return_instructions
+    def _add_return_instreuctions(self, ins):
+        [self._app(x) for x in ins]

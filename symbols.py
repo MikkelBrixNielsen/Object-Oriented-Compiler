@@ -94,8 +94,8 @@ class ASTSymbolVisitor(VisitorsBase):
         t.number_of_variables = self.variable_offset
 
     def preVisit_function(self, t):
-        self._check_if_user_type_exists(t.type, t.lineno)
-        if self._current_level >= 0: # in global scope or deeper
+        _check_if_user_type_exists(self, t.type, t.lineno)
+        if t.name != "global" or self._current_level > -1: # in global scope or deeper
             if self._current_scope.lookup_this_scope(t.name):
                 error_message(
                     "Symbol Collection",
@@ -168,11 +168,11 @@ class ASTSymbolVisitor(VisitorsBase):
         t.decl.type = t.type
 
     def preVisit_variables_list(self, t):
-        self._check_if_user_type_exists(t.type, t.lineno)
+        _check_if_user_type_exists(self, t.type, t.lineno)
         # if variables_list has a next pass along its type
         if t.next: 
             t.next.type = t.type
-        self._record_variables(t, NameCategory.VARIABLE, t.type)
+        _record_variables(self, t, NameCategory.VARIABLE, t.type)
 
     # FIXME make class declaration the descriptor and give class 
     # FIXME declaration in lexer a class body instead of descriptor???
@@ -220,7 +220,7 @@ class ASTSymbolVisitor(VisitorsBase):
                 error_message("Symbol Collection",
                               f"Extension '{t.extends}' is not a class.",
                               t.lineno)
-            self._extend(t, super)
+            _extend(self, t, super)
         self._current_scope = self._current_scope.parent
         self._current_level -= 1
 
@@ -231,7 +231,7 @@ class ASTSymbolVisitor(VisitorsBase):
             t.methods.parent = t.name
 
     def preVisit_attributes_declaration_list(self, t):
-        self._check_if_user_type_exists(t.type, t.lineno)
+        _check_if_user_type_exists(self, t.type, t.lineno)
         t.decl.name = t.name
         t.decl.type = t.type
         if t.next:
@@ -251,7 +251,7 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.type = t.type
         value = self._current_scope.lookup(t.name)
         value.info[0].append((t.variable, t.type))
-        self._record_variables(t, NameCategory.ATTRIBUTE, t.name)
+        _record_variables(self, t, NameCategory.ATTRIBUTE, t.name)
 
     def preVisit_methods_declaration_list(self, t):
         t.decl.parent = t.parent
@@ -259,7 +259,7 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.parent = t.parent
 
     def preVisit_method(self, t):
-        self._check_if_user_type_exists(t.type, t.lineno)
+        _check_if_user_type_exists(self, t.type, t.lineno)
         this = self._current_scope.lookup(NameCategory.THIS)
         t.parent = this.cat
         t.par_list.type = this.type
@@ -275,7 +275,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         cn = t.lhs.__class__.__name__
-        #self._check_if_initialized(cn, t)
+        #_check_if_initialized(cn, t)
         lhs = t.lhs
         if cn == "expression_attribute":
             lhs = t.lhs.inst
@@ -298,11 +298,11 @@ class ASTSymbolVisitor(VisitorsBase):
   
     def postVisit_statement_return(self, t):
         cn = t.exp.__class__.__name__
-        self._check_if_initialized(cn, t.exp)
+        _check_if_initialized(self, cn, t.exp)
 
     def preVisit_statement_print(self, t):
         cn = t.exp.__class__.__name__
-        #self._check_if_initialized(cn, t.exp)
+        #_check_if_initialized(cn, t.exp)
         if cn == "expression_new_instance":
             error_message("Symbol Collection",
                           f"Object initialization not allowed in print statement",
@@ -325,7 +325,7 @@ class ASTSymbolVisitor(VisitorsBase):
                           f"Anonymous instantiation of '{t.exp.type}' array not allowed.",
                           t.exp.lineno)
         cn = t.exp.__class__.__name__
-        #self._check_if_initialized(cn, t.exp)
+        #_check_if_initialized(cn, t.exp)
         # Assigns the struct each expression relates to
         if t.next:
             t.next.struct = t.struct
@@ -333,13 +333,14 @@ class ASTSymbolVisitor(VisitorsBase):
             return
         # Assigns types to the parameters
         if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
-            t.exp.type = self._current_scope.lookup(self._get_identifier(t.exp)).type
+            t.exp.type = self._current_scope.lookup(_get_identifier(t.exp)).type
 
+    # Probably just delete this since it is taken care of through variables_declaration_list now but mention it existed in the report
     #def preVisit_array_list(self, t):
     #    if t.name: # the array is an attribute on a class if it has a name
     #        value = self._current_scope.lookup(t.name)
     #        value.info[0].append((t.variable, t.type))
-    #    self._record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
+    #    _record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
 
     def postVisit_expression_array_indexing(self, t):
         val = self._current_scope.lookup(t.identifier)
@@ -376,109 +377,111 @@ class ASTSymbolVisitor(VisitorsBase):
     # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
 
 # Auxiliaries
-    def _record_variables(self, t, *args): # maybe don't need to be *args
-        # AUX: Recording local variable names in the symbol table:
-        if self._current_scope.lookup_this_scope(t.variable):
-            error_message(
-                "Symbol Collection",
-                f"Redeclaration of '{t.variable}' in the same scope.",
-                t.lineno)
+def _record_variables(self, t, *args): # maybe don't need to be *args
+    # AUX: Recording local variable names in the symbol table:
+    if self._current_scope.lookup_this_scope(t.variable):
+        error_message(
+            "Symbol Collection",
+            f"Redeclaration of '{t.variable}' in the same scope.",
+            t.lineno)
  
-        self._current_scope.insert(
-            t.variable, SymVal(args[0],
-                               t.type,
-                               self._current_level,
-                               [self.variable_offset] + [x for x in args]))
-        self.variable_offset += 1
+    self._current_scope.insert(
+        t.variable, SymVal(args[0],
+                           t.type,
+                           self._current_level,
+                           [self.variable_offset] + [x for x in args]))
+    self.variable_offset += 1
 
-    # Extends class with appropriate methods and attributes 
-    def _extend(self, t, ext):
-        this = self._current_scope.lookup(t.name)
-        if not this:
-            error_message("Symbol Collection",
-                        f"class '{t.name}' not found.",
-                        t.lineno)
-        new_additions = []
-        for i in range(len(ext.info)):
-            for new_elem in ext.info[i]:
-                found = False
-                if i != 2: # Tuple comparison for attributes, methods, and extensions
-                    for elem in this.info[i]:
-                        if new_elem[0] == elem[0]:
-                            found = True
-                            break # new_elem was found, so stop looking for it
-                if not found and i != 2:
-                    new_additions.append(new_elem)
-        this.info[3] += new_additions
+# Extends class with appropriate methods and attributes 
+def _extend(self, t, ext):
+    this = self._current_scope.lookup(t.name)
+    if not this:
+        error_message("Symbol Collection",
+                    f"class '{t.name}' not found.",
+                    t.lineno)
+    new_additions = []
+    for i in range(len(ext.info)):
+        for new_elem in ext.info[i]:
+            found = False
+            if i != 2: # Tuple comparison for attributes, methods, and extensions
+                for elem in this.info[i]:
+                    if new_elem[0] == elem[0]:
+                        found = True
+                        break # new_elem was found, so stop looking for it
+            if not found and i != 2:
+                new_additions.append(new_elem)
+    this.info[3] += new_additions
     
-    def _check_if_initialized(self, cn, t):
-        if (not cn == "expression_integer" and not cn == "expression_float" and 
-            not cn == "expression_boolean" and not cn == "expression_char"):
-            ident = self._get_identifier(t)
-            val = None
-            if cn == "expression_binop" or cn == "statement_assignment":
-                self._check_if_initialized(t.lhs.__class__.__name__, t.lhs)
-                self._check_if_initialized(t.rhs.__class__.__name__, t.rhs)
-                # if neither of lhs or rhs fails the initialization check then
-                # there exists a value
+def _check_if_initialized(self, cn, t):
+    if (not cn == "expression_integer" and not cn == "expression_float" and 
+        not cn == "expression_boolean" and not cn == "expression_char"):
+        ident = _get_identifier(t)
+        val = None
+        if cn == "expression_binop" or cn == "statement_assignment":
+            _check_if_initialized(self, t.lhs.__class__.__name__, t.lhs)
+            _check_if_initialized(self, t.rhs.__class__.__name__, t.rhs)
+            # if neither of lhs or rhs fails the initialization check then
+            # there exists a value
+            val = True
+        elif cn == "expression_method" or cn == "expression_attribute":
+            val = self._current_scope.lookup(t.inst)
+            if t.inst == "this":
                 val = True
-            elif cn == "expression_method" or cn == "expression_attribute":
-                val = self._current_scope.lookup(t.inst)
-                if t.inst == "this":
-                    val = True
-            elif cn == "expression_new_instance" or cn == "expression_new_array":
-                val = True
-            elif cn in ["str", "int", "float", "char", "bool"]:
-                val = True
-            else:
-                val = self._current_scope.lookup(ident)
-            if not val:
-                error_message("Symbol Collection",
-                                f"Accessing variable / function before initialization.",
-                                t.lineno)
-
-    def _get_identifier(self, t):
-        match t.__class__.__name__:
-            case "expression_integer" | "expression_boolean":
-                return t.integer
-            case "expression_float":
-                return t.double
-            case "expression_char":
-                return t.char
-            case "expression_identifier" | "expression_array_indexing":
-                return t.identifier
-            case "expression_call" | "expression_method":
-                return t.name
-            case "expression_binop":
-                return (self._get_identifier(t.lhs), self._get_identifier(t.rhs))
-            case "statement_assignment":
-                return(t.lhs if isinstance(t.lhs, str) else self._get_identifier(t.lhs), self._get_identifier(t.rhs))
-            case "expression_attribute":
-                return t.field
-            case "expression_new_instance" | "expression_new_array":
-                return None
-            case _:
-                error_message("Symbol Collection",
-                              f"_get_identifier does not implement {t.__class__.__name__}",
-                              t.lineno)
-                
-    def _check_size_is_static(self, t, lineno):
-        match t.__class__.__name__:
-            case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
-                pass
-            case "expression_float" | "expression_char":
-                error_message("Symbol Collection",
-                              "Non-integer types cannot be used to initialize the size of an array.",
-                              lineno)
-            case _:
-                error_message("Symbol Collection",
-                              "variable-sized parameters cannot be used to initialize arrays in classes.",
-                              lineno)
-                
-    # check whether the type of the             
-    def _check_if_user_type_exists(self, type, lineno):
-        base_type = type.replace("[]", "").replace("*", "")
-        if base_type not in PRIM_TYPES and not self._current_scope.lookup(base_type):
+        elif cn == "expression_new_instance" or cn == "expression_new_array":
+            val = True
+        elif cn in ["str", "int", "float", "char", "bool"]:
+            val = True
+        else:
+            val = self._current_scope.lookup(ident)
+        if not val:
             error_message("Symbol Collection",
-                          f"Type or class '{base_type}' not defined.",
-                          lineno)
+                            f"Accessing variable / function before initialization.",
+                            t.lineno)
+def _get_identifier(t):
+    match t.__class__.__name__:
+        case "expression_integer" | "expression_boolean":
+            return t.integer
+        case "expression_float":
+            return t.double
+        case "expression_char":
+            return t.char
+        case "expression_identifier" | "expression_array_indexing":
+            return t.identifier
+        case "expression_call" | "expression_method":
+            return t.name
+        case "expression_binop":
+            return (_get_identifier(t.lhs), _get_identifier(t.rhs))
+        case "statement_assignment":
+            return(t.lhs if isinstance(t.lhs, str) else _get_identifier(t.lhs), _get_identifier(t.rhs))
+        case "statement_print" | "statement_return":
+            return _get_identifier(t.exp)
+        case "expression_attribute":
+            return t.field
+        case "expression_new_instance" | "expression_new_array":
+            return None
+        case _:
+            error_message("Symbol Collection",
+                          f"_get_identifier does not implement {t.__class__.__name__}",
+                          t.lineno)
+            
+# if code for array list is deleted then delete this as well but mention in report that this was something that existed                
+#def _check_size_is_static(self, t, lineno):
+#    match t.__class__.__name__:
+#        case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
+#            pass
+#        case "expression_float" | "expression_char":
+#            error_message("Symbol Collection",
+#                          "Non-integer types cannot be used to initialize the size of an array.",
+#                          lineno)
+#        case _:
+#            error_message("Symbol Collection",
+#                          "variable-sized parameters cannot be used to initialize arrays in classes.",
+#                          lineno)
+                
+# check whether a type given is defined            
+def _check_if_user_type_exists(self, type, lineno):
+    base_type = type.replace("[]", "").replace("*", "")
+    if base_type not in PRIM_TYPES and not self._current_scope.lookup(base_type):
+        error_message("Symbol Collection",
+                        f"Type or class '{base_type}' not defined.",
+                        lineno)

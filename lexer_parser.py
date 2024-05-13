@@ -164,12 +164,12 @@ def p_optional_assignment_list(t):
     t[0] = t[1]
 
 def p_assignment_list(t):
-    '''assignment_list : statement_assignment
-                       | statement_assignment assignment_list'''
-    if len(t) == 2:
+    '''assignment_list : statement_assignment SEMICOL
+                       | statement_assignment SEMICOL assignment_list'''
+    if len(t) == 3:
         t[0] = AST.assignment_list(t[1], None, t.lexer.lineno)
     else:
-        t[0] = AST.assignment_list(t[1], t[2], t.lexer.lineno)
+        t[0] = AST.assignment_list(t[1], t[3], t.lexer.lineno)
 
 # DUE TO STM_LIST BEING OPTIONAL FUNCTIONS NO LONGER HAVE REQUIRED RETURN STATEMENT
 # MAKE IT SO RETURN IS REQUIRED BY FUNCTIONS WHICH AREN'T GLOLAL FUNCTION
