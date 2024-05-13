@@ -136,7 +136,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_call(self, t):
         value = self._current_scope.lookup(t.name)
         node = value.info
-        print(value.info.number_of_parameters)
         if self.number_of_actual_parameters[-1] < node.number_of_parameters:
             error_message("Type Checking",
                           f"'{t.name}' was called with too few parameters.",

@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from singleton_decorator import singleton
 from visitors_base import VisitorsBase
-from symbols import NameCategory
+from symbols import NameCategory, PRIM_TYPES
 import AST
 
 class Op(Enum):
@@ -47,6 +47,7 @@ class Op(Enum):
     RAW = auto()
 
     ALLOC = auto()
+    FREE = auto()
     ALLOCSTART = auto()
     ALLOCEND = auto()
     MEMCHECK = auto()
@@ -121,7 +122,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._code.append(instruction)
 
     def preVisit_variables_declaration_list(self, t):
-        print(t.type)
         self._app(Ins(Op.TYPE, t.decl.type))        
 
     def midVisit_variables_declaration_list(self, t):
@@ -269,6 +269,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.PREMID))
 
     def postVisit_function(self, t):
+        self._cleanup(t)
         self._exit_current_scope(t)
         if t.name != "global" or t.scope_level > 1:
             self._app(Ins(Op.IDTL_M))
@@ -494,3 +495,32 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             if member[0] == m[0] and member[1] == m[1]:
                 return True
         return False
+    
+    def _cleanup(self, t):
+        # Collects all variables defined in the function
+        collected_vars = {}
+        if not t.name == "global" or t.scope_level > 1:
+            var = t.body.variables_decl
+            while var: 
+                # do all the things have type???
+                if not (var.type in PRIM_TYPES):
+                        collected_vars[var.decl.variable] = False                            
+                var = var.next
+            # looks through statements to see what collected variables are assigned 
+            stm = t.body.stm_list
+            while stm:
+                # create a way to get the identifier of a give lhs of a statement
+                # collected_vars[stm.identifier] = True 
+                stm = t.body.stm_list.next
+
+            # if the flag for a given key is set meaning it has been assigned something 
+            # that has been allocated then it should be freed
+            for key, flag in collected_vars.items():
+                if flag:
+                    self.app(Ins(Op.FREE, key))
+
+
+
+
+
+

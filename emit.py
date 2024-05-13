@@ -167,6 +167,8 @@ class Emit:
                     self._add("fprintf(stderr, \"Memory allocation failed.\");")
                     self.indent_level -= 1
                     self._add("}\n")
+                case Op.FREE:
+                    self._add(f"free({instr.args[0]});")
                 case Op.DEFAULTVAL:
                     self._raw(self._generate_default_value(instr))
                 case _:
