@@ -418,8 +418,6 @@ def p_statement_call(t):
     'statement_call : IDENT LPAREN optional_expression_list RPAREN'
     t[0] = AST.statement_call(t[1], t[3], t.lexer.lineno)
 
-
-
 # FIXME Be able to do instance access on a class and call a method
 # which might be a member of one of the instance variables 
 # and not the instance itself
@@ -432,10 +430,6 @@ def p_statement_this_method(t):
     '''statement_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'''
     # FIXME                  | THIS DOT statement_method'''
     t[0] = AST.statement_method(t[1], t[3], t[5], t.lexer.lineno)
-
-
-
-
 
 def p_optional_statement_list(t):
     '''optional_statement_list : empty

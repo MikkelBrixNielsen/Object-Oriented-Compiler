@@ -41,8 +41,12 @@ class SymbolTable:
     def insert(self, name, value):
         self._tab[name] = value
 
+    # lookup for when not using "this." syntax
+    # skips the scope for the class descriptor but not the function defined in cd
     def lookup(self, name):
-        if name in self._tab:
+        if NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab:
+           return self.parent.lookup(name)
+        elif name in self._tab:
             return self._tab[name]
         elif self.parent:
             return self.parent.lookup(name)
@@ -52,6 +56,22 @@ class SymbolTable:
     def lookup_this_scope(self, name):
         if name in self._tab:
             return self._tab[name]
+        else:
+            return None
+    
+    def lookup_class(self, name):
+        if NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab and name in self._tab:
+            return self._tab[name]
+        elif self.parent:
+            return self.parent.lookup_class(name)
+        else:
+            return None
+        
+    def lookup_all(self, name):
+        if name in self._tab:
+            return self._tab[name]
+        elif self.parent:
+            return self.parent.lookup(name)
         else:
             return None
 
@@ -177,7 +197,7 @@ class ASTSymbolVisitor(VisitorsBase):
     # FIXME make class declaration the descriptor and give class 
     # FIXME declaration in lexer a class body instead of descriptor???
     def preVisit_class_declaration(self, t):
-        if self._current_scope.lookup(t.name):
+        if self._current_scope.lookup_this_scope(t.name):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
@@ -211,7 +231,7 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def postVisit_class_declaration(self, t):
         if t.extends:
-            super = self._current_scope.lookup(t.extends)
+            super = self._current_scope.lookup_all(t.extends)
             if not super:
                 error_message("Symbol Collection",
                               f"Class '{t.extends}' not found - maybe used before declaration.",
@@ -249,7 +269,7 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.next:
             t.next.name = t.name 
             t.next.type = t.type
-        value = self._current_scope.lookup(t.name)
+        value = self._current_scope.parent.lookup_this_scope(t.name)
         value.info[0].append((t.variable, t.type))
         _record_variables(self, t, NameCategory.ATTRIBUTE, t.name)
 
@@ -260,11 +280,11 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_method(self, t):
         _check_if_user_type_exists(self, t.type, t.lineno)
-        this = self._current_scope.lookup(NameCategory.THIS)
+        this = self._current_scope.lookup_class(NameCategory.THIS)
         t.parent = this.cat
         t.par_list.type = this.type
         self.preVisit_function(t)
-        value = self._current_scope.lookup(t.parent)
+        value = self._current_scope.lookup_all(t.parent)
         value.info[1].append((t.name, t.type, t))
 
     def midVisit_method(self, t):
@@ -275,16 +295,24 @@ class ASTSymbolVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         cn = t.lhs.__class__.__name__
-        #_check_if_initialized(cn, t)
+        name = t.lhs
         lhs = t.lhs
         if cn == "expression_attribute":
-            lhs = t.lhs.inst
+            if t.lhs.inst == "this":
+                name = t.lhs.field
+            else:    
+                name = t.lhs.inst
+            lhs = self._current_scope.lookup_class(name)
         elif cn == "expression_array_indexing":
-           lhs = t.lhs.identifier
-        lhs = self._current_scope.lookup(lhs)
+           # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
+           name = t.lhs.identifier
+           lhs = self._current_scope.lookup(name)
+        else:
+            lhs = self._current_scope.lookup(name)
+
         if not lhs:
             error_message("Symbol Collection",
-                          f"Assignment before declaration of '{t.lhs}",
+                          f"Assignment before declaration of '{name}",
                           t.lineno)
         
         if t.rhs.__class__.__name__ == "expression_new_instance":
@@ -324,18 +352,18 @@ class ASTSymbolVisitor(VisitorsBase):
             error_message("Symbol Collection",
                           f"Anonymous instantiation of '{t.exp.type}' array not allowed.",
                           t.exp.lineno)
-        cn = t.exp.__class__.__name__
-        #_check_if_initialized(cn, t.exp)
         # Assigns the struct each expression relates to
         if t.next:
             t.next.struct = t.struct
         if cn == "expression_null":
             return
         # Assigns types to the parameters
-        #if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
-        cn = t.exp.__class__.__name__
         if cn not in ["expression_integer", "expression_char", "expression_bool", "expression_float"]:
-            val = self._current_scope.lookup(_get_identifier(t.exp))
+            val = None
+            if cn == "expression_method" or cn == "expression_attribute":
+                val = self._current_scope.lookup_class(_get_identifier(t.exp))
+            else:    
+                val = self._current_scope.lookup(_get_identifier(t.exp))
             if val:
                 t.exp.type = val.type
 
@@ -430,7 +458,7 @@ def _check_if_initialized(self, cn, t):
         elif cn == "expression_method" or cn == "expression_attribute":
             val = self._current_scope.lookup(t.inst)
             if t.inst == "this":
-                val = True
+                val = self._current_scope.lookup_class(t.field)
         elif cn == "expression_new_instance" or cn == "expression_new_array":
             val = True
         elif cn in ["str", "int", "float", "char", "bool"]:
@@ -438,8 +466,10 @@ def _check_if_initialized(self, cn, t):
         else:
             val = self._current_scope.lookup(ident)
         if not val:
+            if ident == "this":
+                ident = ident + "." + t.field
             error_message("Symbol Collection",
-                            f"Accessing variable / function before initialization.",
+                            f"Accessing variable / function '{ident}' before initialization.",
                             t.lineno)
 def _get_identifier(t):
     match t.__class__.__name__:
@@ -457,7 +487,7 @@ def _get_identifier(t):
             return (_get_identifier(t.lhs), _get_identifier(t.rhs))
         case "statement_assignment":
             return(t.lhs if isinstance(t.lhs, str) else _get_identifier(t.lhs), _get_identifier(t.rhs))
-        case "statement_print" | "statement_return":
+        case "statement_print" | "statement_return" | "expression_group":
             return _get_identifier(t.exp)
         case "expression_attribute":
             return t.inst#, t.field
@@ -485,7 +515,7 @@ def _get_identifier(t):
 # check whether a type given is defined            
 def _check_if_user_type_exists(self, type, lineno):
     base_type = type.replace("[]", "").replace("*", "")
-    if base_type not in PRIM_TYPES and not self._current_scope.lookup(base_type):
+    if base_type not in PRIM_TYPES and not self._current_scope.lookup_all(base_type):
         error_message("Symbol Collection",
                         f"Type or class '{base_type}' not defined.",
                         lineno)
