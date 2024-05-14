@@ -1,18 +1,16 @@
 import sys
 import getopt
-
 import interfacing_parser
 from errors import error_message
 from lexer_parser import parser
 from symbols import ASTSymbolVisitor
 from type_checking import ASTTypeCheckingVisitor
 from ast_printer import ASTTreePrinterVisitor
+from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-
 __version__ = "1.0.0"
-
 
 # MAIN
 def compiler(showSource, showAST, macOS, input_file, output_file):
@@ -60,7 +58,6 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
     the_program = interfacing_parser.the_program
 
     if showSource or showAST:
-
         if showAST:
             # Print AST tree in dot format:
             pp = ASTTreePrinterVisitor()
@@ -68,9 +65,7 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         the_program = the_program.body  # Remove artificial outer global.
         the_program.accept(pp)
         return pp.getPrettyProgram()
-
     else:
-
         # Collect names of functions, parameters, and local variables:
         symbols_collector = ASTSymbolVisitor()
         the_program.accept(symbols_collector)
@@ -78,6 +73,10 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         # Type check use of functions, parameters, and local variables:
         type_checker = ASTTypeCheckingVisitor()
         the_program.accept(type_checker)
+
+        # generate Labels for variables, functions, methods
+        #label_generator = ASTLabelGeneratorVisitor()
+        #the_program.accept(label_generator)
 
         # Generate intermediate code:
         intermediate_code_generator = ASTCodeGenerationVisitor()
@@ -90,7 +89,6 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         code = emitter.get_code()
 
         return code
-
 
 def main(argv):
     usage = f"Usage: {sys.argv[0]} [-hvsm] [-i source_file] [-o target_file]"
@@ -145,7 +143,6 @@ def main(argv):
         f.close()
     else:
         print(result)
-
 
 if __name__ == "__main__":
     main(sys.argv[1:])

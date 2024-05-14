@@ -332,8 +332,12 @@ class ASTSymbolVisitor(VisitorsBase):
         if cn == "expression_null":
             return
         # Assigns types to the parameters
-        if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
-            t.exp.type = self._current_scope.lookup(_get_identifier(t.exp)).type
+        #if hasattr(t.exp, "identifier"):# and cn != "expression_new_instance":
+        cn = t.exp.__class__.__name__
+        if cn not in ["expression_integer", "expression_char", "expression_bool", "expression_float"]:
+            val = self._current_scope.lookup(_get_identifier(t.exp))
+            if val:
+                t.exp.type = val.type
 
     # Probably just delete this since it is taken care of through variables_declaration_list now but mention it existed in the report
     #def preVisit_array_list(self, t):
@@ -456,7 +460,7 @@ def _get_identifier(t):
         case "statement_print" | "statement_return":
             return _get_identifier(t.exp)
         case "expression_attribute":
-            return t.field
+            return t.inst#, t.field
         case "expression_new_instance" | "expression_new_array":
             return None
         case _:

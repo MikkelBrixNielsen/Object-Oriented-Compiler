@@ -185,6 +185,7 @@ class Emit:
     def _addParam(self, instr):
         type = str(instr.args[0]).replace("*", "").replace("[]", "")
         stars = self._get_stars(instr.args[0])
+        type = "int" if type == "bool" else type
         s = type + " " + stars + instr.args[1]
         if instr.args[2]:
             s += ", "
@@ -193,8 +194,7 @@ class Emit:
     def _createFunctionSignature(self, instr):
         stars = self._get_stars(instr.args[0])
         type = str(instr.args[0]).replace("[]", "").replace("*", "")
-        if type == "bool":
-            type = "int"
+        type = "int" if type == "bool" else type
         if not instr.args[1] == "main":
             params = self._formatParams(instr.args[2])
             s = type + " " + stars + instr.args[1] + "(" + params + ");"
@@ -208,6 +208,7 @@ class Emit:
         s = ""
         while (current):
             type = current.type.replace("*", "").replace("[]", "")
+            type = "int" if type == "bool" else type
             s += type + " " + self._get_stars(current.type)  + current.parameter
             if current.next:
                 s += ", "
