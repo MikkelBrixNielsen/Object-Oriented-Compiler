@@ -44,7 +44,10 @@ class SymbolTable:
     # lookup for when not using "this." syntax
     # skips the scope for the class descriptor but not the function defined in cd
     def lookup(self, name):
-        if NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab:
+        # for if we implement classes in classes
+        #if (self.parent and (NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab or 
+        #    NameCategory.THIS in self._tab and NameCategory.THIS in self.parent._tab and self.parent._tab[NameCategory.THIS].type !=  self._tab[NameCategory.THIS].type)):
+        if self.parent and NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab:
            return self.parent.lookup(name)
         elif name in self._tab:
             return self._tab[name]
@@ -60,7 +63,10 @@ class SymbolTable:
             return None
     
     def lookup_class(self, name):
-        if NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab and name in self._tab:
+        # for if we implement classes in classes
+            #if self.parent and (NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab and name in self._tab or 
+        #NameCategory.THIS in self._tab and NameCategory.THIS in self.parent._tab and self._tab[NameCategory.THIS].type != self.parent._tab[NameCategory.THIS].type):
+        if self.parent and NameCategory.THIS in self._tab and NameCategory.THIS not in self.parent._tab and name in self._tab:
             return self._tab[name]
         elif self.parent:
             return self.parent.lookup_class(name)
@@ -229,7 +235,7 @@ class ASTSymbolVisitor(VisitorsBase):
         t.symbol_table = self._current_scope
         t.scope_level = self._current_level
 
-    def postVisit_class_declaration(self, t):
+        # if class has an extension add the extensions methods and attributes to this class
         if t.extends:
             super = self._current_scope.lookup_all(t.extends)
             if not super:
@@ -241,6 +247,8 @@ class ASTSymbolVisitor(VisitorsBase):
                               f"Extension '{t.extends}' is not a class.",
                               t.lineno)
             _extend(self, t, super)
+
+    def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
         self._current_level -= 1
 
@@ -459,6 +467,8 @@ def _check_if_initialized(self, cn, t):
             val = self._current_scope.lookup(t.inst)
             if t.inst == "this":
                 val = self._current_scope.lookup_class(t.field)
+            if not val:
+                val = _lookup_in_extensions(self, t, t.__class__.__name__)
         elif cn == "expression_new_instance" or cn == "expression_new_array":
             val = True
         elif cn in ["str", "int", "float", "char", "bool"]:
@@ -471,6 +481,20 @@ def _check_if_initialized(self, cn, t):
             error_message("Symbol Collection",
                             f"Accessing variable / function '{ident}' before initialization.",
                             t.lineno)
+            
+def _lookup_in_extensions(self, t, cat):
+    idx = 0 if cat == "expression_attribute" else 1
+    val = self._current_scope.lookup_all(t.inst)
+    cd = self._current_scope.lookup_all(val.type[:-1])
+    while True:
+        for member in cd.info[idx]:
+            if member[0] == t.field:
+                return member
+        if not len(cd.info[2]) > 0:
+            break
+        cd = self._current_scope.lookup_all(cd.info[2][0])
+    return None
+
 def _get_identifier(t):
     match t.__class__.__name__:
         case "expression_integer" | "expression_boolean":

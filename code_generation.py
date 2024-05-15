@@ -339,22 +339,21 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         cd = None
         var = t.inst
         if t.inst == "this":
-            #cd = self._current_scope.lookup(self._current_scope.lookup(NameCategory.THIS).cat)
-            # This attributes can only be defined in a method 
-            self._app(Ins(Op.RAW, var + "->" + t.field)) 
+            inst = self._current_scope.lookup(NameCategory.THIS).cat
+            cd = self._current_scope.lookup(inst)
         else:
             cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
             var = self._labels.lookup(t.inst)
 
-            if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
-                self._app(Ins(Op.RAW, var + "->" + t.field))
-            else:
-                s = ""
-                while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
-                    ext = cd.info[2][0]
-                    s = s + self._comp_labels.lookup(ext.lower()) + "->"
-                    cd = self._current_scope.lookup(ext)
-                self._app(Ins(Op.RAW, var + "->" + s + t.field))
+        if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
+            self._app(Ins(Op.RAW, var + "->" + t.field))
+        else:
+            s = ""
+            while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
+                ext = cd.info[2][0]
+                s = s + self._comp_labels.lookup(ext.lower()) + "->"
+                cd = self._current_scope.lookup(ext)
+            self._app(Ins(Op.RAW, var + "->" + s + t.field))
 
     def preVisit_expression_method(self, t):
         prefix = ""

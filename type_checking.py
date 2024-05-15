@@ -1,6 +1,6 @@
 from visitors_base import VisitorsBase
 from errors import error_message
-from symbols import NameCategory
+from symbols import NameCategory, _lookup_in_extensions
 import AST
 
 class ASTTypeCheckingVisitor(VisitorsBase):
@@ -551,7 +551,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def _exist_membership(self, t, cat):
         inst = None
         if t.inst == "this":
+            # try to find attribute in this class scope
             inst = self._current_scope.lookup_class(t.field if cat == "attribute" else t.name)
+            if not inst: # if attribute not in this class scope look through class' extensions
+                inst = _lookup_in_extensions(self, t, t.__class__.__name__)
         else:
             inst = self._current_scope.lookup(t.inst)
         if not inst:
