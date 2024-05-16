@@ -463,7 +463,10 @@ def p_expression(t):
     t[0] = t[1]
 
 def p_expression_array_indexing(t):
-    'expression_array_indexing : IDENT LBRAC expression RBRAC'
+    '''expression_array_indexing : IDENT LBRAC expression RBRAC 
+                                 | expression_array_indexing LBRAC expression RBRAC
+                                 | expression_this_attribute LBRAC expression RBRAC
+                                 | expression_attribute LBRAC expression RBRAC'''
     t[0] = AST.expression_array_indexing(t[1], t[3], t.lexer.lineno)
 
 def p_expression_new_array(t):

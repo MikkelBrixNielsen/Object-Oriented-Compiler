@@ -313,7 +313,8 @@ class ASTSymbolVisitor(VisitorsBase):
             lhs = self._current_scope.lookup_class(name)
         elif cn == "expression_array_indexing":
            # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
-           name = t.lhs.identifier
+           name = _get_identifier(t.lhs.identifier)
+           name = name[0] if len(name) > 1 else name
            lhs = self._current_scope.lookup(name)
         else:
             lhs = self._current_scope.lookup(name)
@@ -383,12 +384,26 @@ class ASTSymbolVisitor(VisitorsBase):
     #    _record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
 
     def postVisit_expression_array_indexing(self, t):
-        val = self._current_scope.lookup(t.identifier)
+        ident = _get_identifier(t.identifier)[0]
+        val = self._current_scope.lookup(ident)
         if not val:
             error_message("Symobl Collection",
-                          f"Array access before declaration of '{t.identifier}'.",
+                          f"Array access before declaration of '{ident}'.",
                           t.lineno)
-        t.type = val.type
+        cn = t.identifier.__class__.__name__
+        if cn== "expression_array_indexing":
+            ident = t.identifier
+            type = val.type
+            while not isinstance(ident, str):
+                type = type[:-2]
+                ident = ident.identifier
+            t.type = type
+        elif cn == "expression_attribute":
+            member = _lookup_in_extensions(self, t.identifier, cn)   
+            if member:
+                t.type = member[1]
+            else:       
+                t.type = val.type
 
     def preVisit_expression_new_array(self, t):
         cn = t.size.__class__.__name__
@@ -456,6 +471,7 @@ def _check_if_initialized(self, cn, t):
     if (not cn == "expression_integer" and not cn == "expression_float" and 
         not cn == "expression_boolean" and not cn == "expression_char"):
         ident = _get_identifier(t)
+        ident = ident[0] if len(ident) > 1 else ident
         val = None
         if cn == "expression_binop" or cn == "statement_assignment":
             _check_if_initialized(self, t.lhs.__class__.__name__, t.lhs)
@@ -471,7 +487,7 @@ def _check_if_initialized(self, cn, t):
                 val = _lookup_in_extensions(self, t, t.__class__.__name__)
         elif cn == "expression_new_instance" or cn == "expression_new_array":
             val = True
-        elif cn in ["str", "int", "float", "char", "bool"]:
+        elif cn in PRIM_TYPES:
             val = True
         else:
             val = self._current_scope.lookup(ident)
@@ -486,9 +502,10 @@ def _lookup_in_extensions(self, t, cat):
     idx = 0 if cat == "expression_attribute" else 1
     val = self._current_scope.lookup_all(t.inst)
     cd = self._current_scope.lookup_all(val.type[:-1])
+    m = t.field if cat == "expression_attribute" else t.name
     while True:
         for member in cd.info[idx]:
-            if member[0] == t.field:
+            if member[0] == m:
                 return member
         if not len(cd.info[2]) > 0:
             break
@@ -503,8 +520,16 @@ def _get_identifier(t):
             return t.double
         case "expression_char":
             return t.char
-        case "expression_identifier" | "expression_array_indexing":
+        case "expression_identifier":
             return t.identifier
+        case "expression_array_indexing":
+            if t.identifier.__class__.__name__ == "expression_array_indexing":
+                ident = t.identifier
+                while not isinstance(ident, str):
+                    ident = ident.identifier
+                return ident
+            else:
+                return _get_identifier(t.identifier)
         case "expression_call" | "expression_method":
             return t.name
         case "expression_binop":
@@ -514,13 +539,15 @@ def _get_identifier(t):
         case "statement_print" | "statement_return" | "expression_group":
             return _get_identifier(t.exp)
         case "expression_attribute":
-            return t.inst#, t.field
+            return (t.inst, t.field)
         case "expression_new_instance" | "expression_new_array":
             return None
+        case "str":
+            return t
         case _:
             error_message("Symbol Collection",
                           f"_get_identifier does not implement {t.__class__.__name__}",
-                          t.lineno)
+                          -1)
             
 # if code for array list is deleted then delete this as well but mention in report that this was something that existed                
 #def _check_size_is_static(self, t, lineno):

@@ -46,6 +46,7 @@ class Op(Enum):
     COMMA = auto()
     RAW = auto()
 
+    NULLINITIALIZATION = auto()
     ALLOC = auto()
     FREE = auto()
     ALLOCSTART = auto()
@@ -240,12 +241,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.IDTL_P))
             self._app(Ins(Op.SIGNATURE, t.type, name, t.par_list))
         self._enter_new_scope(t)
-        #print("new_scope", "------------>", t.name)
-        #if hasattr(t, "_labels"):
-        #    print(t._labels._tab)
-        #if hasattr(t, "_temp_labels"):
-        #    print(t._temp_labels._tab)
-        #if hasattr(t, "_comp_labels"):
         #    print(t._comp_labels._tab)
     
     def midVisit_function(self, t):
@@ -340,9 +335,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         var = t.inst
         if t.inst == "this":
             inst = self._current_scope.lookup(NameCategory.THIS).cat
-            cd = self._current_scope.lookup(inst)
+            cd = self._current_scope.lookup_all(inst)
         else:
-            cd = self._current_scope.lookup(self._current_scope.lookup(t.inst).type[:-1])
+            cd = self._current_scope.lookup_all(self._current_scope.lookup_all(t.inst).type[:-1])
             var = self._labels.lookup(t.inst)
 
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
@@ -352,7 +347,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
                 ext = cd.info[2][0]
                 s = s + self._comp_labels.lookup(ext.lower()) + "->"
-                cd = self._current_scope.lookup(ext)
+                cd = self._current_scope.lookup_all(ext)
             self._app(Ins(Op.RAW, var + "->" + s + t.field))
 
     def preVisit_expression_method(self, t):
@@ -360,10 +355,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         lablled_inst = ""
         lablled_name = self._comp_labels.lookup(t.name)
         if not t.inst == "this":
-            prefix = self._current_scope.lookup(t.inst).info[-1][:-1]
+            prefix = self._current_scope.lookup_all(t.inst).info[-1][:-1]
             lablled_inst = self._labels.lookup(t.inst)
         else:
-            prefix = self._current_scope.lookup(NameCategory.THIS).type[:-1]
+            prefix = self._current_scope.lookup_all(NameCategory.THIS).cat
 
         self._app(Ins(Op.RAW, prefix + "_"))
         self._app(Ins(Op.RAW, lablled_name))
@@ -389,7 +384,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ALLOCEND, t.type[:-2]))
 
     def preVisit_expression_array_indexing(self, t):
-        self._app(Ins(Op.RAW, f"{self._labels.lookup(t.identifier)}["))
+        if isinstance(t.identifier, str):
+            self._app(Ins(Op.RAW, f"{self._labels.lookup(_get_identifier(t.identifier))}["))
+        else:
+            self._app(Ins(Op.RAW, "["))
 
     def postVisit_expression_array_indexing(self, t):
         self._app(Ins(Op.RAW, "]"))
@@ -400,7 +398,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 # auxies
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
-        current = self._current_scope.lookup(t.struct)
+        current = self._current_scope.lookup_all(t.struct)
         prev = self._labels.lookup(t.identifier) if t.identifier else ""
         while len(current.info[2]) > 0: # There are more extensions to generate code for 
             name = current.info[2][0].lower()
@@ -418,7 +416,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.RAW, ";"))
             
             # Instanciate all attributeds for the new instance 
-            super = self._current_scope.lookup(current.info[2][0])
+            super = self._current_scope.lookup_all(current.info[2][0])
             for attr in super.info[0]:
                 self._app(Ins(Op.INDENT))
                 self._app(Ins(Op.ASSIGN, var + "->" + attr[0]))
@@ -444,14 +442,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     print(f"{attr[1]} not implemented in _extension_instance in code generation - please fix")
                 self._app(Ins(Op.RAW, ";"))
             prev = var
-            current = self._current_scope.lookup(current.info[2][0])
+            current = self._current_scope.lookup_all(current.info[2][0])
 
     # FIXME Make it so code is generated for the extensions 
     # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
     # FIXME - Variables inherited should become a special version associated with a "virtual" instance of the extension e.g. Second has attr a, so in Third there will be a Second_a attr and for Seconds get_a Third will return Second_a
     # or it might be possible to include an actual instance of Second in third and just use the methods already defined for second which are in the global scope already
     def _extend_class(self, t):
-        cd = self._current_scope.lookup(t.name)
+        cd = self._current_scope.lookup_all(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
             for ext in cd.info[2]:
                 name = ext.lower()
@@ -514,7 +512,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def _free_list(self, collected_vars):
         for key in collected_vars:
-            val = self._current_scope.lookup(key)
+            val = self._current_scope.lookup_this_scope(key)
             self._free_object(key, val)
             self._app(Ins(Op.FREE, key))
 
@@ -543,11 +541,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 self._app(Ins(Op.FREE, key)) # free itself after freeing its potential instances
     
     def _free_array(self, key, val):
-        #print(key, val)
-
-        pass
-
-        # assignment to array put size into arrays info
+        self._app(Ins(Op.INDENT))
+        self._app(Ins(Op.RAW, "// Remember to free your array :))\n"))
+        # if array is returned don't free the things in the array
+        # otherwise free the things in the array 
 
 
     #def _collect_variables_in_return(self, t):

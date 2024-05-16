@@ -445,6 +445,8 @@ class expression_array_indexing:
     type: Any = field(default=None)
 
     def accept(self, visitor):
+        if not isinstance(self.identifier, str):
+            self.identifier.accept(visitor)
         visitor.preVisit(self)
         self.idx.accept(visitor)
         visitor.postVisit(self)

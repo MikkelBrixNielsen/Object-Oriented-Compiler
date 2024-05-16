@@ -1,4 +1,5 @@
 from code_generation import Op
+from symbols import PRIM_TYPES
 
 _intermediate_to_C = {
     Op.ADD: "+",
@@ -167,7 +168,7 @@ class Emit:
                 case Op.FREE:
                     self._add(f"free({instr.args[0]});")
                 case Op.DEFAULTVAL:
-                    self._raw(self._generate_default_value(instr))
+                    self._raw(self._generate_default_value(instr.args[0]))
                 case _:
                     print(f"ERROR {instr.opcode} NOT DEFINED!")
 
@@ -217,6 +218,8 @@ class Emit:
     
     def _create_varlist(self, instr):
         s = self._get_stars(instr.args[2]) + instr.args[0]
+        if instr.args[2] not in PRIM_TYPES:
+            s += " = " + self._generate_default_value(instr.args[2])
         if instr.args[1]:
             s += ","
         self._raw(" " + s)
@@ -230,9 +233,8 @@ class Emit:
             return "int" + self._get_stars(type)
         return type
 
-    def _generate_default_value(self, instr):
-        ptr = len(self._get_stars(instr.args)) > 0
-        match (instr.args[0]):
+    def _generate_default_value(self, type):
+        match (type):
             case "float":
                 return "0.0"
             case "char":

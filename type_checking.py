@@ -1,7 +1,6 @@
 from visitors_base import VisitorsBase
 from errors import error_message
-from symbols import NameCategory, _lookup_in_extensions
-import AST
+from symbols import NameCategory, _lookup_in_extensions, _get_identifier
 
 class ASTTypeCheckingVisitor(VisitorsBase):
     def __init__(self):
@@ -56,9 +55,11 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             #                  t.lineno)
             lhs = self._exist_membership(t.lhs, "attribute")
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
-            lhs = self._current_scope.lookup(t.lhs.identifier)
+            ident = _get_identifier(t.lhs.identifier)
+            ident = ident[0]
+            lhs = self._current_scope.lookup(ident)
             if lhs:
-                lhs = [t.lhs.identifier, lhs.type[:-2], lhs.cat]
+                lhs = [ident, t.lhs.type, lhs.cat]
         else: 
             lhs = self._current_scope.lookup(t.lhs)
             if lhs:
@@ -196,7 +197,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           f"Identifier '{t.name}' is not a function.",
                           t.lineno)
         cd = self._current_scope.lookup(self._current_scope.lookup_all(t.inst).type[:-1])
-        meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[1] + cd.info[3])
+        meth = self._find_member_in_tuple_list((t.name, t.type), cd.info[1] + cd.info[3], "method")
         self._exp_check(t.name, t.exp_list, meth, t.lineno)   
 
     def postVisit_expression_method(self, t):
@@ -241,16 +242,18 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     # FIXME - if attribute array indexing is implemented add logic to use different 
     # lookup when array indexing is on an attribute array
     def postVisit_expression_array_indexing(self, t):
-        val = self._current_scope.lookup(t.identifier)
-        if not val.type[-2:] == "[]":
+        ident = _get_identifier(t.identifier)
+        type = t.identifier.type
+        if not type[-2:] == "[]":
             error_message("Type Checking", 
-                          f"cannot index into identifier '{t.identifier}' - It is not an array.",
+                          f"cannot index into identifier '{ident}' - It is not an array.",
                           t.lineno)
         if not self.is_integer(t.idx):
             error_message("Type Checking",
                           f"Array index has to be an integer.",
                           t.lineno)
-        t.type = t.type[:-2]
+        if t.type[-2:] == "[]":
+            t.type = t.type[:-2]
         #val = self._current_scope.lookup(t.identifier)
         #if val.cat != NameCategory.PARAMETER:
         #    self._is_idx_oob(t.idx, val)
@@ -497,7 +500,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             current = current.next
         if not current.stm.exp.type == t.type:
             error_message("Type Checking",
-                          f"Type of function and return statement does not match.",
+                          f"Type of function and return does not match. Was given '{current.stm.exp.type}' expected '{t.type}'",
                           t.lineno)
             
     def _get_type(self, t):
@@ -592,10 +595,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         return field
         
-    def _find_member_in_tuple_list(self, m, tl):
+    def _find_member_in_tuple_list(self, m, tl, cat):
         for member in tl:
             if member[0] == m[0] and member[1] == m[1]:
-                return member[2]
+                return member[2] if cat == "method" else member
         return None
 
     def _parameter_check(self, name, params, value, lineno):
