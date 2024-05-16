@@ -218,8 +218,8 @@ class Emit:
     
     def _create_varlist(self, instr):
         s = self._get_stars(instr.args[2]) + instr.args[0]
-        if instr.args[2] not in PRIM_TYPES:
-            s += " = " + self._generate_default_value(instr.args[2])
+        #if instr.args[2] not in PRIM_TYPES:
+        #    s += " = " + self._generate_default_value(instr.args[2])
         if instr.args[1]:
             s += ","
         self._raw(" " + s)

@@ -306,22 +306,19 @@ class ASTSymbolVisitor(VisitorsBase):
         name = t.lhs
         lhs = t.lhs
         if cn == "expression_attribute":
-            if t.lhs.inst == "this":
-                name = t.lhs.field
-            else:    
-                name = t.lhs.inst
+            name = t.lhs.field if t.lhs.inst == "this" else t.lhs.inst
             lhs = self._current_scope.lookup_class(name)
         elif cn == "expression_array_indexing":
            # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
            name = _get_identifier(t.lhs.identifier)
-           name = name[0] if len(name) > 1 else name
+           name = name if not isinstance(name, tuple) else name[0]
            lhs = self._current_scope.lookup(name)
         else:
             lhs = self._current_scope.lookup(name)
 
         if not lhs:
             error_message("Symbol Collection",
-                          f"Assignment before declaration of '{name}",
+                          f"Assignment before declaration of '{name}'",
                           t.lineno)
         
         if t.rhs.__class__.__name__ == "expression_new_instance":
@@ -370,7 +367,9 @@ class ASTSymbolVisitor(VisitorsBase):
         if cn not in ["expression_integer", "expression_char", "expression_bool", "expression_float"]:
             val = None
             if cn == "expression_method" or cn == "expression_attribute":
-                val = self._current_scope.lookup_class(_get_identifier(t.exp))
+                name = _get_identifier(t.exp)
+                name = name if not isinstance(name, tuple) else name[0]
+                val = self._current_scope.lookup_class(name)
             else:    
                 val = self._current_scope.lookup(_get_identifier(t.exp))
             if val:
@@ -384,17 +383,18 @@ class ASTSymbolVisitor(VisitorsBase):
     #    _record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
 
     def postVisit_expression_array_indexing(self, t):
-        ident = _get_identifier(t.identifier)[0]
-        val = self._current_scope.lookup(ident)
+        ident = _get_identifier(t.identifier)
+        name = ident if not isinstance(ident, tuple) else ident[0]
+        val = self._current_scope.lookup(name) if name != "this" else self._current_scope.lookup_class(ident[1])
         if not val:
             error_message("Symobl Collection",
                           f"Array access before declaration of '{ident}'.",
                           t.lineno)
         cn = t.identifier.__class__.__name__
-        if cn== "expression_array_indexing":
+        if cn == "expression_array_indexing":
             ident = t.identifier
             type = val.type
-            while not isinstance(ident, str):
+            while (not isinstance(ident, str)) and ident.__class__.__name__ != "expression_attribute":
                 type = type[:-2]
                 ident = ident.identifier
             t.type = type
@@ -404,6 +404,8 @@ class ASTSymbolVisitor(VisitorsBase):
                 t.type = member[1]
             else:       
                 t.type = val.type
+        else:
+            t.type = val.type
 
     def preVisit_expression_new_array(self, t):
         cn = t.size.__class__.__name__
@@ -471,7 +473,7 @@ def _check_if_initialized(self, cn, t):
     if (not cn == "expression_integer" and not cn == "expression_float" and 
         not cn == "expression_boolean" and not cn == "expression_char"):
         ident = _get_identifier(t)
-        ident = ident[0] if len(ident) > 1 else ident
+        ident = ident if not isinstance(ident, tuple) else ident[0]
         val = None
         if cn == "expression_binop" or cn == "statement_assignment":
             _check_if_initialized(self, t.lhs.__class__.__name__, t.lhs)
@@ -525,9 +527,9 @@ def _get_identifier(t):
         case "expression_array_indexing":
             if t.identifier.__class__.__name__ == "expression_array_indexing":
                 ident = t.identifier
-                while not isinstance(ident, str):
+                while not isinstance(ident, str) and ident.__class__.__name__ != "expression_attribute":
                     ident = ident.identifier
-                return ident
+                return ident if not "expression_attribute" else _get_identifier(ident)
             else:
                 return _get_identifier(t.identifier)
         case "expression_call" | "expression_method":

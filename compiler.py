@@ -74,9 +74,9 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         type_checker = ASTTypeCheckingVisitor()
         the_program.accept(type_checker)
 
-        # generate Labels for variables, functions, methods
-        #label_generator = ASTLabelGeneratorVisitor()
-        #the_program.accept(label_generator)
+        # Generate Labels for variables, functions, methods
+        label_generator = ASTLabelGeneratorVisitor()
+        the_program.accept(label_generator)
 
         # Generate intermediate code:
         intermediate_code_generator = ASTCodeGenerationVisitor()

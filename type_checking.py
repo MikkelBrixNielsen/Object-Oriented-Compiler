@@ -56,7 +56,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             lhs = self._exist_membership(t.lhs, "attribute")
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
             ident = _get_identifier(t.lhs.identifier)
-            ident = ident[0]
+            ident = ident if not isinstance(ident, tuple) else ident[0]
             lhs = self._current_scope.lookup(ident)
             if lhs:
                 lhs = [ident, t.lhs.type, lhs.cat]
@@ -64,9 +64,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             lhs = self._current_scope.lookup(t.lhs)
             if lhs:
                 lhs = [t.lhs, lhs.type, lhs.cat]
+
         if not lhs:
             error_message("Type Checking",
-                          f"Variable '{lhs[0]}' not found.",
+                          f"Variable '{t}' not found.",
                           t.lineno)
         #if lhs[2] == NameCategory.PARAMETER:
         #    error_message("Type Checking",
@@ -243,7 +244,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     # lookup when array indexing is on an attribute array
     def postVisit_expression_array_indexing(self, t):
         ident = _get_identifier(t.identifier)
-        type = t.identifier.type
+        ident = ident if not isinstance(ident, tuple) else ident[1]
+        type = t.identifier.type if not isinstance(t.identifier, str) else t.type
         if not type[-2:] == "[]":
             error_message("Type Checking", 
                           f"cannot index into identifier '{ident}' - It is not an array.",
