@@ -128,13 +128,11 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         current = self._current_scope.lookup(t.struct)
         while len(current.info[2]) > 0:
             # generate temp label
-            print(t.temp_label)
             if not hasattr(t, "temp_label"):
                 t.temp_label = LabelGenerator._generate()
             # generate extension label
             if len(current.info[2]) < 2:
                 current.info[2].append(LabelGenerator._generate())
-                # print(current.info[2]) # THIS IS FUCKING PROBLEM!!!!!!!!!!!!!!!!!!
 
             super = self._current_scope.lookup(current.info[2][0])
             for i in range(len(super.info[0])):

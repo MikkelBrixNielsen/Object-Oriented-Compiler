@@ -130,8 +130,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
-        self._app(Ins(Op.INDENT))
-        self._app(Ins(Op.ASSIGN, "TEMP" + t.temp_label))
+        self._app(Ins(Op.TYPE, t.exp.type))
+        self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.exp.type))
+        self._app(Ins(Op.ASSIGN, ''))
+
 
     def postVisit_statement_return(self, t):
         self._app(Ins(Op.RAW, ";"))
@@ -321,13 +323,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._enter_new_scope(t)
 
     def preVisit_instance_expression_list(self, t):
-        ident = _get_identifier(t.exp)
-        ident = ident if not isinstance(ident, tuple) else ident[0]
-        label = ""
-        #if ident == "this":
-        print(ident)
-        label = self._current_scope.lookup_this_scope(ident).label
-        struct = t.struct + label
+        val = self._current_scope.lookup_this_scope(t.struct)
+        struct = t.struct + val.label if val else ""
         self._app(Ins(Op.ATTRASSIGN, struct, t.next, t.param))
 
     def midVisit_instance_expression_list(self, t):
@@ -362,6 +359,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             lablled_inst = t.inst + self._current_scope.lookup(t.inst).label
         else:
             prefix = self._current_scope.lookup(NameCategory.THIS).cat
+            lablled_inst = t.inst
 
         self._app(Ins(Op.RAW, prefix + "_"))
         self._app(Ins(Op.RAW, lablled_name))
@@ -415,7 +413,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
             # Assigns created struct to its parent class
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, prev + "->" + name + " = " + var)) # Label on name???
+            self._app(Ins(Op.RAW, prev + "->" + var + " = " + var))
             self._app(Ins(Op.RAW, ";"))
             
             # Instanciate all attributeds for the new instance 
@@ -507,18 +505,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # Do free for global scope encapsulating main and stuff
 
     def _cleanup(self, t):
-        #vars_in_return = self._collect_variables_in_return(t)
         scope_variables = self._collect_variables()
-        #for x in vars_in_return:
-        #    if x in scope_variables:
-        #        scope_variables.remove(x)
-        self._free_list(scope_variables)
+        #self._free_list(scope_variables)
 
     def _free_list(self, collected_vars):
         for key in collected_vars:
             val = self._current_scope.lookup_this_scope(key)
             self._free_object(key, val)
-            self._app(Ins(Op.FREE, key))
 
     def _collect_variables(self):
         variables_to_free = []
@@ -530,18 +523,21 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         return variables_to_free
     
     def _free_object(self, key, val):
-        if val.type[:-1] == "*": # if type is a pointer to an instance
+        if val.type[-1:] == "*": # if type is a pointer to an instance
             #print("---------------------->instance")
-            self._free_instance_variables(key, val)
+            cd = self._current_scope.lookup_all(val.type[:-1])
+            self._free_instance_variables(key, cd)
         else: # type is pointer to some array
             #print("---------------------->array")
             self._free_array(key, val)
 
-    def _free_instance_variables(self, key, val):
-        cd = self._current_scope.lookup(val.type[:-1])
+    def _free_instance_variables(self, key, cd):
         for elem in cd.info[0] + cd.info[3]: # look through cd's attributes for other instances / arrays
             if len(elem) < 3 and elem[1] not in PRIM_TYPES: # if elem is attr (len < 3) and type of attribute is non-primitive
-                self._free_object(key, val)
+                if elem[1][-1:] == "*":
+                    self._free_instance_variables(elem[0], self._current_scope.lookup_all(elem[0]))
+                elif elem[1] not in PRIM_TYPES:
+                    self._free_array(elem[0], cd)
                 self._app(Ins(Op.FREE, key)) # free itself after freeing its potential instances
     
     def _free_array(self, key, val):
