@@ -554,17 +554,20 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     # Type checking does not seem to allow for attributes access more than 1 extension deep for some reason
     # Checks if instance trying to be accessed exits and has field as member
     def _exist_membership(self, t, cat):
+        ident = t.inst
         inst = None
         if t.inst == "this":
+            ident = t.field if cat == "attribute" else t.name
             # try to find attribute in this class scope
-            inst = self._current_scope.lookup_class(t.field if cat == "attribute" else t.name)
+            inst = self._current_scope.lookup_class(ident)
             if not inst: # if attribute not in this class scope look through class' extensions
                 inst = _lookup_in_extensions(self, t, t.__class__.__name__)
+
         else:
             inst = self._current_scope.lookup(t.inst)
         if not inst:
             error_message("Type Checking", 
-                          f"Instance '{t.inst}' not found.",
+                          f"'{ident}' could not be found.",
                           t.lineno)
         field = None
         desc = None

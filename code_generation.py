@@ -104,7 +104,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         self._app(Ins(Op.TYPE, t.rhs.type))
-        self._app(Ins(Op.VARLIST, "TEMP" + t.label, None, t.rhs.type))
+        self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
         
     def midVisit_statement_assignment(self, t):
@@ -112,10 +112,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, ";"))
         if  cnr == "expression_new_array":
-            self._app(Ins(Op.MEMCHECK, "TEMP" + t.label))
+            self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.ASSIGN, (t.lhs)))
+            self._app(Ins(Op.ASSIGN, t.lhs + self._current_scope.lookup(t.lhs).label))
         cnl = t.lhs.__class__.__name__
         if cnl  == "expression_array_indexing" or cnl == "expression_attribute":
             self._app(Ins(Op.INDENT))
@@ -126,18 +126,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if not isinstance(t.lhs , str):
             self._app(Ins(Op.ASSIGN, ''))
         if not cn == "expression_new_instance":
-            self._app(Ins(Op.RAW, "TEMP" + t.label))
+            self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
             self._app(Ins(Op.RAW, ";"))
 
     def preVisit_statement_return(self, t):
         self._app(Ins(Op.INDENT))
-        self._app(Ins(Op.ASSIGN, "TEMP" + t.label))
+        self._app(Ins(Op.ASSIGN, "TEMP" + t.temp_label))
 
     def postVisit_statement_return(self, t):
         self._app(Ins(Op.RAW, ";"))
         self._cleanup(t)
         self._app(Ins(Op.RET))
-        self._app(Ins(Op.RAW, "TEMP" + t.label + ";"))
+        self._app(Ins(Op.RAW, "TEMP" + t.temp_label + ";"))
 
     def preVisit_statement_print(self, t):
         self._app(Ins(Op.START, "printf", None))
@@ -311,11 +311,11 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_expression_new_instance(self, t):
         self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
-        self._app(Ins(Op.MEMCHECK, "TEMP" + t.label))
+        self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         self._app(Ins(Op.INDENT))
-        identifier = (t.identifier) if t.identifier else ""
+        identifier = t.identifier + self._current_scope.lookup(t.identifier).label if t.identifier else ""
         self._app(Ins(Op.ASSIGN, identifier))
-        self._app(Ins(Op.RAW, "TEMP" + t.label))
+        self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
         self._app(Ins(Op.RAW, ";"))
         self._extension_instance(t)
         self._enter_new_scope(t)
@@ -324,8 +324,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         ident = _get_identifier(t.exp)
         ident = ident if not isinstance(ident, tuple) else ident[0]
         label = ""
-        if ident == "this":
-            label = self._current_scope.lookup_this_scope(ident).label
+        #if ident == "this":
+        print(ident)
+        label = self._current_scope.lookup_this_scope(ident).label
         struct = t.struct + label
         self._app(Ins(Op.ATTRASSIGN, struct, t.next, t.param))
 
@@ -340,15 +341,15 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             cd = self._current_scope.lookup_all(inst)
         else:
             cd = self._current_scope.lookup_all(self._current_scope.lookup_all(t.inst).type[:-1])
-            var = (t.inst)
-
+            var = t.inst + self._current_scope.lookup(t.inst).label
+        
         if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
             self._app(Ins(Op.RAW, var + "->" + t.field))
         else:
             s = ""
             while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
                 ext = cd.info[2][0]
-                s = s + (ext.lower()) + "->"
+                s = s + ext.lower() + cd.info[2][1] + "->"
                 cd = self._current_scope.lookup_all(ext)
             self._app(Ins(Op.RAW, var + "->" + s + t.field))
 
@@ -401,10 +402,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         current = self._current_scope.lookup_all(t.struct)
-        prev = (t.identifier) if t.identifier else ""
+        prev = t.identifier + self._current_scope.lookup(t.identifier).label if t.identifier else ""
         while len(current.info[2]) > 0: # There are more extensions to generate code for 
             name = current.info[2][0].lower()
-            var = self._temp_labels.insert(name)
+            var = name + current.info[2][1]
             type = current.info[2][0] + "*"
             self._app(Ins(Op.TYPE, type))
             self._app(Ins(Op.VARLIST, var, None, type))
@@ -414,7 +415,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
             # Assigns created struct to its parent class
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, prev + "->" +(name) + " = " + var))
+            self._app(Ins(Op.RAW, prev + "->" + name + " = " + var)) # Label on name???
             self._app(Ins(Op.RAW, ";"))
             
             # Instanciate all attributeds for the new instance 
@@ -431,7 +432,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 elif attr[1][-1] == "*":
                     ins1 = self._code.pop()
                     ins2 = self._code.pop()
-                    var1 = (attr[1][:-1].lower())
+                    var1 = attr[1][:-1].lower() + t.temp_label
                     self._app(Ins(Op.TYPE, attr[1]))
                     self._app(Ins(Op.VARLIST, var1, None, attr[1]))
                     self._app(Ins(Op.RAW, " = "))  
@@ -453,27 +454,28 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def _extend_class(self, t):
         cd = self._current_scope.lookup_all(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists
-            for ext in cd.info[2]:
+            for ext in cd.info[2][0]:
                 name = ext.lower()
                 self._app(Ins(Op.TYPE, ext))
-                self._app(Ins(Op.VARLIST, "*" + (name), None, None))
+                self._app(Ins(Op.VARLIST, "*" + name + cd.info[2][1], None, None))
                 self._app(Ins(Op.RAW, ";"))
         self._app(Ins(Op.CLASSMID, t.name))
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
             for member in cd.info[3]: # where the additions are located
                 if len(member) >= 3: # method
+                    method_name = member[0] + member[2].label
                     self._app(Ins(Op.TYPE, member[1]))
-                    self._app(Ins(Op.START, " " + t.name + "_" + (member[0]), member[1]))
+                    self._app(Ins(Op.START, " " + t.name + "_" + method_name, member[1]))
                     self._app(Ins(Op.PARAMS, t.name, "*this", None))
                     self._app(Ins(Op.PREMID))
                     self._app(Ins(Op.IDTL_P))
                     self._app(Ins(Op.RET))
                     name = cd.info[2][0].lower()
-                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + (member[0]) + "(this->" + (name) + ")"))
+                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + method_name + "(this->" + name + t.label + ")"))
                     self._app(Ins(Op.RAW, ";"))
                     self._app(Ins(Op.IDTL_M))
                     self._app(Ins(Op.END))
-                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + (member[0]), AST.parameter_list(t.name, "*this", None, t.lineno)))
+                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + method_name, AST.parameter_list(t.name, "*this", None, t.lineno)))
 
     def _is_member_in_tuple_list(self, m, tl):
         for member in tl:

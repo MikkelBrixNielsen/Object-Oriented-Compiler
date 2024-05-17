@@ -64,11 +64,16 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
 
     def preVisit_statement_assignment(self, t):
         # generate lable for temp variable
-        t.label = self.label_generator._generate()
+        if not hasattr(t, "temp_label"):
+            t.temp_label = self.label_generator._generate()
+        cn = t.rhs.__class__.__name__
+        if cn == "expression_new_instance":
+            if not hasattr(t.rhs, "temp_label"):
+                t.rhs.temp_label = t.temp_label        
 
     def preVisit_statement_return(self, t):
         # generate lable for temp variable
-        t.label = self.label_generator._generate()
+        t.temp_label = self.label_generator._generate()
 
     def preVisit_method(self, t):
         self._generate_and_set_label_if_none(t, t)
@@ -79,8 +84,13 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         self.postVisit_function(t)
 
     def postVisit_expression_identifier(self, t):
-        t.label = self.label_generator._generate()
-        self._current_scope.lookup_this_scope(t.identifier).label = t.label
+        if not hasattr(t, "label"):
+            val = self._current_scope.lookup(t.identifier)
+            if not hasattr(val, "label"):
+                t.label = self.label_generator._generate()
+                self._current_scope.lookup_this_scope(t.identifier).label = t.label
+            else:
+                t.label = val.label        
 
     def preVisit_function(self, t):
         if t.scope_level > 0: # functions defined inside the global scope (so all functions excluding the implicit function for global scope)
@@ -88,7 +98,7 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
                 self._generate_and_set_label_if_none(t, t)
                 self._current_scope.lookup(t.name).label = t.label
         self._current_scope = t.symbol_table
-    
+
     def postVisit_function(self, t):
         self._current_scope = self._current_scope.parent
 
@@ -108,21 +118,42 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
             if t.identifier != "this":
                 t.label = self._current_scope.lookup(t.identifier).label
             else:
-                t.label = ""
+                t.label = ""            
 
     def preVisit_expression_new_instance(self, t):
         self._extension_instance(t)
         self._current_scope = t.symbol_table
 
-    def _extension_instance(self, t):
+    def _extension_instance(self, t):        
         current = self._current_scope.lookup(t.struct)
         while len(current.info[2]) > 0:
-            self._temp_labels.insert(current.info[2][0].lower())
+            # generate temp label
+            print(t.temp_label)
+            if not hasattr(t, "temp_label"):
+                t.temp_label = LabelGenerator._generate()
+            # generate extension label
+            if len(current.info[2]) < 2:
+                current.info[2].append(LabelGenerator._generate())
+                # print(current.info[2]) # THIS IS FUCKING PROBLEM!!!!!!!!!!!!!!!!!!
+
             super = self._current_scope.lookup(current.info[2][0])
-            for attr in super.info[0]:
-                if attr[1][-1] == "*":
-                    self._temp_labels.insert(attr[1][:-1].lower())
+            for i in range(len(super.info[0])):
+                if super.info[0][i][-1][-1:] == "*":
+                    super.info[0][i] = (super.info[0][i][0], super.info[0][i][1], LabelGenerator._generate())
             current = self._current_scope.lookup(current.info[2][0])
+
+    def midVisit_class_descriptor(self, t):
+        self._extend_class(t)
+
+    def _extend_class(self, t):
+        # currently there can only be one extension so it is fine to 
+        # put the label for the extension on the tree but if there 
+        # can be multiple extensions (multi-inheritannce) the lables
+        # should be saved along with the extension name
+        cd = self._current_scope.lookup(t.name).info[2]
+        if not len(cd) < 1:
+            self._generate_and_set_label_if_none(t, t)
+            cd.append(t.label)
 
     def _find_member_in_tuple_list(self, m, tl, cat):
         for member in tl:
