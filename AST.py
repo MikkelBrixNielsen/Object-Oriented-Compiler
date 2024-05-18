@@ -273,7 +273,7 @@ class statement_assignment:
         #if not isinstance(self.lhs, str):  
         #    self.lhs.accept(visitor)
         visitor.midVisit(self)
-        if not isinstance(self.lhs, str):  
+        if not isinstance(self.lhs, str):
             self.lhs.accept(visitor)
         #self.rhs.accept(visitor)
         visitor.postVisit(self)

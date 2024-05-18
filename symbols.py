@@ -529,7 +529,7 @@ def _get_identifier(t):
                 ident = t.identifier
                 while not isinstance(ident, str) and ident.__class__.__name__ != "expression_attribute":
                     ident = ident.identifier
-                return ident if not "expression_attribute" else _get_identifier(ident)
+                return ident if isinstance(ident, str) else _get_identifier(ident)
             else:
                 return _get_identifier(t.identifier)
         case "expression_call" | "expression_method":

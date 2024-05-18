@@ -581,6 +581,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                               f"Identifier '{t.inst}' is not an instance.",
                               t.lineno)
             desc = self._current_scope.lookup_all(inst.type[:-1])
+        
         # checking for membership
         idx = 0 if cat == "attribute" else 1 # if not attribute then method
         name = t.field if cat == "attribute" else t.name
@@ -596,7 +597,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         if not field:
             field = t.field if cat == "attribute" else t.name
             error_message("Type Checking",
-                          f"Identifier '{field}' not found.",
+                          f"Identifier '{field}' not found in instance '{t.inst}'",
                           t.lineno)
         return field
         

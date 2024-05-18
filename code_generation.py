@@ -102,10 +102,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_variables_list(self, t):
         self._app(Ins(Op.VARLIST, t.variable + t.label, t.next, t.type))
 
+    # FIXME - GARBAGE COLLECTION free when assigning values to lhs if rhs has no references
     def preVisit_statement_assignment(self, t):
         self._app(Ins(Op.TYPE, t.rhs.type))
         self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
+        # self._cleanup # or something similar
         
     def midVisit_statement_assignment(self, t):
         cnr = t.rhs.__class__.__name__
@@ -226,7 +228,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST, t.variable, t.next, t.type))
+        self._app(Ins(Op.VARLIST, t.variable + t.label, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier + t.label))
@@ -325,7 +327,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_instance_expression_list(self, t):
         val = self._current_scope.lookup_this_scope(t.struct)
         struct = t.struct + val.label if val else ""
-        self._app(Ins(Op.ATTRASSIGN, struct, t.next, t.param))
+        cd = self._current_scope.lookup_all(self._current_scope.lookup(t.struct).type[:-1]).info
+        member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
+        self._app(Ins(Op.ATTRASSIGN, struct, t.next, member[0] + member[2]))
 
     def midVisit_instance_expression_list(self, t):
         self._app(Ins(Op.RAW, ";"))
@@ -339,16 +343,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         else:
             cd = self._current_scope.lookup_all(self._current_scope.lookup_all(t.inst).type[:-1])
             var = t.inst + self._current_scope.lookup(t.inst).label
-        
-        if self._is_member_in_tuple_list((t.field, t.type), cd.info[0]): # is attr member of cd
-            self._app(Ins(Op.RAW, var + "->" + t.field))
+
+        member = self._find_member_in_tuple_list((t.field, t.type), cd.info[0])
+        if member: # is attr member of cd
+            self._app(Ins(Op.RAW, var + "->" + member[0] + member[2]))
         else:
             s = ""
-            while not self._is_member_in_tuple_list((t.field, t.type), cd.info[0]) and cd.info[2]:
+            while (not member) and len(cd.info[2]) != 0:
                 ext = cd.info[2][0]
                 s = s + ext.lower() + cd.info[2][1] + "->"
                 cd = self._current_scope.lookup_all(ext)
-            self._app(Ins(Op.RAW, var + "->" + s + t.field))
+                member = self._find_member_in_tuple_list((t.field, t.type), cd.info[0])
+            self._app(Ins(Op.RAW, var + "->" + s + member[0] + member[2]))
 
     def preVisit_expression_method(self, t):
         prefix = ""
@@ -403,7 +409,8 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         prev = t.identifier + self._current_scope.lookup(t.identifier).label if t.identifier else ""
         while len(current.info[2]) > 0: # There are more extensions to generate code for 
             name = current.info[2][0].lower()
-            var = name + current.info[2][1]
+            var = name + t.inst_label
+            name = name + current.info[2][1]
             type = current.info[2][0] + "*"
             self._app(Ins(Op.TYPE, type))
             self._app(Ins(Op.VARLIST, var, None, type))
@@ -413,14 +420,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
             # Assigns created struct to its parent class
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.RAW, prev + "->" + var + " = " + var))
+            self._app(Ins(Op.RAW, prev + "->" + name + " = " + var))
             self._app(Ins(Op.RAW, ";"))
             
             # Instanciate all attributeds for the new instance 
             super = self._current_scope.lookup_all(current.info[2][0])
             for attr in super.info[0]:
                 self._app(Ins(Op.INDENT))
-                self._app(Ins(Op.ASSIGN, var + "->" + attr[0]))
+                self._app(Ins(Op.ASSIGN, var + "->" + attr[0] + attr[2]))
                 if attr[1] == "int" or attr[1][-2:] == "[]" or attr[1] == "bool":
                     self._app(Ins(Op.RAW, "0"))
                 elif attr[1] == "float":
@@ -475,11 +482,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.END))
                     self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + method_name, AST.parameter_list(t.name, "*this", None, t.lineno)))
 
-    def _is_member_in_tuple_list(self, m, tl):
+    def _find_member_in_tuple_list(self, m, tl):
         for member in tl:
             if member[0] == m[0] and member[1] == m[1]:
-                return True
-        return False
+                return member
+        return None
+    
+    def _is_member_in_tuple_list(self, m, tl):
+        return not self._find_member_in_tuple_list(m, tl) == None
     
     #def _cleanup(self, t):
     #    if not t.name == "global" or t.scope_level > 0: # clean up for all other user defined functions
@@ -501,51 +511,85 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     #            var = var.next                         
     #        decl = decl.next 
     #    print(collected_vars)
-
+    
+    # TODO
     # Do free for global scope encapsulating main and stuff
 
+    #def _assignment(self, t):
+    #    cn = t.lhs.__class__.__name__
+    #    name = t.lhs
+    #    lhs = t.lhs
+    #    if cn == "expression_attribute":
+    #        name = t.lhs.field if t.lhs.inst == "this" else t.lhs.inst
+    #        lhs = self._current_scope.lookup_class(name)
+    #    elif cn == "expression_array_indexing":
+    #       # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
+    #       name = _get_identifier(t.lhs.identifier)
+    #       name = name if not isinstance(name, tuple) else name[0]
+    #       lhs = self._current_scope.lookup(name)
+    #    else:
+    #        lhs = self._current_scope.lookup(name)
+    #
+    #    # finds identifiers in rhs expression and saves them in symbol table for lhs identifier
+    #    lhs._assigned_value = []
+    #    lhs._assigned_value.append(_get_identifier(t.rhs))
+    #    if hasattr(t.rhs, "_assigned_value"):
+    #        lhs._assigned_value = lhs._assigned_value + t.rhs._assigned_value
+    #    
+    #    # for all variables in rhs if they have variables assigned to them and are not primitive 
+    #    # types save those variables as well
+    #    for var in lhs._assigned_value:
+    #        val = self._current_scope.lookup(var)
+    #        if not val:
+    #            val = self._current_scope.lookup_class(var)
+    #        if val and val.type not in PRIM_TYPES:
+    #            lhs._assigned_value = lhs._assigned_value + val._assigned_value
+
+
     def _cleanup(self, t):
-        scope_variables = self._collect_variables()
-        #self._free_list(scope_variables)
+        self._free_list(self._collect_variables(t))
 
     def _free_list(self, collected_vars):
-        for key in collected_vars:
-            val = self._current_scope.lookup_this_scope(key)
-            self._free_object(key, val)
+        for key, info in collected_vars.items():
+            self._free_object(key, info.type, info.label)
 
-    def _collect_variables(self):
-        variables_to_free = []
-        for elem in self._current_scope._tab:
-            info = self._current_scope.lookup_this_scope(elem)
+    def _collect_variables(self, t):
+        # should be all variables with a reference count > 0
+        print(t)
+        variables_to_not_free = []
+        if t.exp.type not in PRIM_TYPES: # and len(t._references) > 0:
+            variables_to_not_free.append(t.exp.identifier)
+
+        variables_to_free = {}
+        for elem, info in self._current_scope._tab.items():
             if (info.cat != NameCategory.PARAMETER and info.type not in PRIM_TYPES and 
-                elem != NameCategory.THIS):
-                variables_to_free.append(elem)
+                elem != NameCategory.THIS and elem not in variables_to_not_free): # and len(t._references) > 0:
+                variables_to_free[elem] = info
         return variables_to_free
     
-    def _free_object(self, key, val):
-        if val.type[-1:] == "*": # if type is a pointer to an instance
-            #print("---------------------->instance")
-            cd = self._current_scope.lookup_all(val.type[:-1])
-            self._free_instance_variables(key, cd)
+
+    def _free_object(self, key, type, label):
+        if type[-1:] == "*": # if type is a pointer to an instance
+            cd = self._current_scope.lookup_all(type[:-1])
+            self._free_instance_variables(key, cd, label)
         else: # type is pointer to some array
-            #print("---------------------->array")
-            self._free_array(key, val)
+            self._free_array(key, type, label)
 
-    def _free_instance_variables(self, key, cd):
-        for elem in cd.info[0] + cd.info[3]: # look through cd's attributes for other instances / arrays
-            if len(elem) < 3 and elem[1] not in PRIM_TYPES: # if elem is attr (len < 3) and type of attribute is non-primitive
-                if elem[1][-1:] == "*":
-                    self._free_instance_variables(elem[0], self._current_scope.lookup_all(elem[0]))
-                elif elem[1] not in PRIM_TYPES:
-                    self._free_array(elem[0], cd)
-                self._app(Ins(Op.FREE, key)) # free itself after freeing its potential instances
-    
-    def _free_array(self, key, val):
+    def _free_instance_variables(self, key, cd, label):
+        # free attributes for given instance
+        for attr in cd.info[0]:
+            if attr[1] not in PRIM_TYPES:
+                self._free_object(*attr)
+        # free extension and its attributes if there is one 
+        if len(cd.info[2]) > 0:
+            self._free_object(cd.info[2][0], cd.info[2][0] + "*", cd.info[2][1])
+        # free instance itself
+        self._app(Ins(Op.FREE, key + label))
+
+    def _free_array(self, key, type, label):
         self._app(Ins(Op.INDENT))
-        self._app(Ins(Op.RAW, "// Remember to free your array :))\n"))
-        # if array is returned don't free the things in the array
-        # otherwise free the things in the array 
-
+        self._app(Ins(Op.RAW, f"// Free({key + label})\n"))
+        pass
 
     #def _collect_variables_in_return(self, t):
     #    vars_in_return = []
@@ -566,16 +610,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     #            current = None
     #    return vars_in_return
     
-    def _flatten_tuple(self, t):
-        if not isinstance(t, tuple):
-            return []
-        flattened_list = []
-        for item in t:
-            if isinstance(item, tuple):
-                flattened_list.extend(self._flatten_tuple(item))
-            else:
-                flattened_list.append(item)
-        return flattened_list
+    #def _flatten_tuple(self, t):
+    #    if not isinstance(t, tuple):
+    #        return []
+    #    flattened_list = []
+    #    for item in t:
+    #        if isinstance(item, tuple):
+    #            flattened_list.extend(self._flatten_tuple(item))
+    #        else:
+    #            flattened_list.append(item)
+    #    return flattened_list
         
         # looks through statements to see what collected variables are assigned 
         #stm = list

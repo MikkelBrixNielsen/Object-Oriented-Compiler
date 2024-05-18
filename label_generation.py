@@ -61,6 +61,13 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
     def preVisit_variables_list(self, t):
         t.label = self.label_generator._generate()
         self._current_scope.lookup_this_scope(t.variable).label = t.label
+    
+    def preVisit_attributes_list(self, t):
+        self._generate_and_set_label_if_none(t, t)
+        cd = self._current_scope.lookup_all(t.name).info   
+        for i in range(len(cd[0])):
+            if len(cd[0][i]) < 3 and cd[0][i][0] == t.variable and  cd[0][i][1] == t.type:
+                cd[0][i] = (cd[0][i][0], cd[0][i][1], t.label)
 
     def preVisit_statement_assignment(self, t):
         # generate lable for temp variable
@@ -127,6 +134,9 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
     def _extension_instance(self, t):        
         current = self._current_scope.lookup(t.struct)
         while len(current.info[2]) > 0:
+            # generate instance label
+            if not hasattr(t, "inst_label"):
+                t.inst_label = LabelGenerator._generate()
             # generate temp label
             if not hasattr(t, "temp_label"):
                 t.temp_label = LabelGenerator._generate()
@@ -134,10 +144,12 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
             if len(current.info[2]) < 2:
                 current.info[2].append(LabelGenerator._generate())
 
-            super = self._current_scope.lookup(current.info[2][0])
-            for i in range(len(super.info[0])):
-                if super.info[0][i][-1][-1:] == "*":
-                    super.info[0][i] = (super.info[0][i][0], super.info[0][i][1], LabelGenerator._generate())
+            # not needed since labels for attributes are now always generated instead if only when it is a pointer
+            #super = self._current_scope.lookup(current.info[2][0])
+            #for i in range(len(super.info[0])):
+            #    if super.info[0][i][-1][-1:] == "*":
+            #        super.info[0][i] = (super.info[0][i][0], super.info[0][i][1], LabelGenerator._generate())
+            #        print(super.info[0])
             current = self._current_scope.lookup(current.info[2][0])
 
     def midVisit_class_descriptor(self, t):
