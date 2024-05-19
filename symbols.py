@@ -306,8 +306,12 @@ class ASTSymbolVisitor(VisitorsBase):
         name = t.lhs
         lhs = t.lhs
         if cn == "expression_attribute":
-            name = t.lhs.field if t.lhs.inst == "this" else t.lhs.inst
-            lhs = self._current_scope.lookup_class(name)
+            if t.lhs.inst == "this":
+                name = f"this.{t.lhs.field}"
+                lhs = self._current_scope.lookup_class(t.lhs.field)
+            else:
+                name = f"{t.lhs.inst}.{t.lhs.field}"
+                lhs = self._current_scope.lookup(t.lhs.inst)
         elif cn == "expression_array_indexing":
            # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
            name = _get_identifier(t.lhs.identifier)

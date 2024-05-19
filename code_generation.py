@@ -104,6 +104,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     # FIXME - GARBAGE COLLECTION free when assigning values to lhs if rhs has no references
     def preVisit_statement_assignment(self, t):
+        self._assign_cleanup(t)
         self._app(Ins(Op.TYPE, t.rhs.type))
         self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
@@ -111,6 +112,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         
     def midVisit_statement_assignment(self, t):
         cnr = t.rhs.__class__.__name__
+        cnl = t.lhs.__class__.__name__
         if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, ";"))
         if  cnr == "expression_new_array":
@@ -118,19 +120,19 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.ASSIGN, t.lhs + self._current_scope.lookup(t.lhs).label))
-        cnl = t.lhs.__class__.__name__
         if cnl  == "expression_array_indexing" or cnl == "expression_attribute":
             self._app(Ins(Op.INDENT))
         
     def postVisit_statement_assignment(self, t):
-        cn = t.rhs.__class__.__name__ 
+        cn = t.rhs.__class__.__name__
+        cnl = t.lhs.__class__.__name__
         # else the expression will do so automatically when visisted by the visitor
-        if not isinstance(t.lhs , str):
+        if not isinstance(t.lhs , str) and cnl != "expression_attribute":
             self._app(Ins(Op.ASSIGN, ''))
         if not cn == "expression_new_instance":
             self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
             self._app(Ins(Op.RAW, ";"))
-
+       
     def preVisit_statement_return(self, t):
         self._app(Ins(Op.TYPE, t.exp.type))
         self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.exp.type))
@@ -234,7 +236,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, t.identifier + t.label))
 
     def preVisit_function(self, t):
-        if t.scope_level > 0: # functions defined instide the global scope (so all functions excluding the implicit function for global scope)
+        # functions defined instide the global scope 
+        # (so all functions excluding the implicit function for global scope)
+        if t.scope_level > 0: 
             name = t.name
             self._app(Ins(Op.TYPE, t.type))
             if not t.name == "main" or t.scope_level > 1:
@@ -317,7 +321,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ALLOC, t.struct+"*", t.struct))
         self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         self._app(Ins(Op.INDENT))
-        identifier = t.identifier + self._current_scope.lookup(t.identifier).label if t.identifier else ""
+
+        identifier = ""
+        if t.identifier.__class__.__name__ == "expression_attribute":
+            identifier = self._generate_attribute_labeled_identifier(t.identifier)
+            identifier = f"{identifier[0]}->{identifier[1]}"
+        else:
+            identifier = t.identifier + self._current_scope.lookup(t.identifier).label
+
         self._app(Ins(Op.ASSIGN, identifier))
         self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
         self._app(Ins(Op.RAW, ";"))
@@ -325,11 +336,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._enter_new_scope(t)
 
     def preVisit_instance_expression_list(self, t):
-        val = self._current_scope.lookup_this_scope(t.struct)
-        struct = t.struct + val.label if val else ""
-        cd = self._current_scope.lookup_all(self._current_scope.lookup(t.struct).type[:-1]).info
-        member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
-        self._app(Ins(Op.ATTRASSIGN, struct, t.next, member[0] + member[2]))
+        inst = ""
+        field = ""
+        if t.struct.__class__.__name__ == "expression_attribute":
+            inst, field = self._generate_attribute_labeled_identifier(t.struct)
+        else:
+            val = self._current_scope.lookup_this_scope(t.struct)
+            inst = t.struct + val.label if val else ""
+            cd = self._current_scope.lookup_all(self._current_scope.lookup(t.struct).type[:-1]).info
+            member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
+            field = member[0] + member[2]
+        self._app(Ins(Op.ATTRASSIGN, inst, t.next, field))
 
     def midVisit_instance_expression_list(self, t):
         self._app(Ins(Op.RAW, ";"))
@@ -406,8 +423,13 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         current = self._current_scope.lookup_all(t.struct)
-        prev = t.identifier + self._current_scope.lookup(t.identifier).label if t.identifier else ""
-        while len(current.info[2]) > 0: # There are more extensions to generate code for 
+        if t.identifier.__class__.__name__ == "expression_attribute":
+            inst, field = self._generate_attribute_labeled_identifier(t.identifier)
+            prev = f"{inst}->{field}"
+        else:
+            prev = t.identifier + self._current_scope.lookup(t.identifier).label
+
+        while len(current.info[2]) > 0: # There are more extensions to generate code for
             name = current.info[2][0].lower()
             var = name + t.inst_label
             name = name + current.info[2][1]
@@ -490,6 +512,25 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     
     def _is_member_in_tuple_list(self, m, tl):
         return not self._find_member_in_tuple_list(m, tl) == None
+
+    def _generate_attribute_labeled_identifier(self, t):
+        idt = [t.inst, t.field]
+        if idt[0] == "this":
+            # this has not label so it remains unchanged
+            # find field label
+            val = self._current_scope.lookup_class(NameCategory.THIS)
+            cd = self._current_scope.lookup_all(val.cat)
+            member = self._find_member_in_tuple_list((idt[1],t.type), cd.info[0]) 
+            idt[1] = member[0] + member[2]
+        else:
+            # find inst label
+            val = self._current_scope.lookup(idt[0])
+            idt[0] = idt[0] + val.label
+            # find attribute label
+            cd = self._current_scope.lookup_all(val.type[:-1])
+            member = self._find_member_in_tuple_list((idt[1], t.type), cd.info[0])
+            idt[1] = member[0] + member[2]
+        return idt
     
     #def _cleanup(self, t):
     #    if not t.name == "global" or t.scope_level > 0: # clean up for all other user defined functions
@@ -546,6 +587,95 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     #            lhs._assigned_value = lhs._assigned_value + val._assigned_value
 
 
+    def _assign_cleanup(self, t):
+        # primitive type should not be freed so no point in keeping count of their references 
+        if t.rhs.type in PRIM_TYPES:
+            return
+        
+        cnl = t.lhs.__class__.__name__
+        cnr = t.rhs.__class__.__name__
+        lhs = _get_identifier(t.lhs)
+        rhs = _get_identifier(t.rhs)
+
+        if cnl == "expression_attribute":
+            lhs, field = lhs
+            lhs_val = self._current_scope.lookup(lhs)
+            # store information regarding what an attribute has been assigned 
+            # on the identifier for the instance they are a part of
+            if hasattr(lhs_val, f"_attr_assigned_value"):
+                lhs_val._attr_assigned_value[field]._references[field].remove((lhs, field))
+                if (lhs_val._attr_assigned_value[field].type not in PRIM_TYPES and
+                    len(lhs_val._attr_assigned_value[field]._references[field]) < 1):
+                    self._app(Ins(Op.FREE, lhs))
+            else:
+                lhs_val._attr_assigned_value = {}
+            
+            rv = t.rhs 
+            if cnr == "expression_attribute":
+                # Get assinged value for attribute
+
+
+                pass
+            else:            
+                if cnr != "expression_call" and cnr != "expression_method":
+                    rhs_val = self._current_scope.lookup(rhs)
+                    if rhs_val: 
+                        rv = rhs_val._attr_assigned_value
+            if not hasattr(rv, "_references"):
+                rv._references = {}
+            if field not in rv._references:
+                rv._references[field] = []  
+            rv._references[field].append((lhs, field))
+            lhs_val._attr_assigned_value[field] = rv
+
+
+        else: # lhs = Identifier or expression_array_indexing
+            lhs_val = self._current_scope.lookup(lhs)        
+            # removes lsh from lhs' assigned value's reference list
+            if hasattr(lhs_val, "_assigned_value"):
+                # remove lhs as reference
+                lhs_val._assigned_value._references.remove(lhs)
+                if (lhs_val._assigned_value.type not in PRIM_TYPES and
+                    len(lhs_val._assigned_value._references) < 1):
+                    # free identifier
+                    self._app(Ins(Op.FREE, lhs))
+
+            # the value that should be assigned 
+            # should be AST node for a new instance 
+            # / allocation / func. call / meth. call
+            rv = t.rhs 
+            if cnr == "expression_attribute":
+                rv = self._rhs_exprresion_attribute_assign_aux(rv)
+                # retrieve AST node from where attributes save their assigned value
+                # This will probably need to be saved on the identifier for the instance the attribute belongs to
+                # Maybe even put a dict there so its more like lookup(t.inst)[_t.field] -> assigned_value
+                # rv = lookup(t.inst)._t.field_assigned_value (or something)
+            else:            
+                # if rhs is an entry in symbol table then it is not an 
+                # AST node so get its assigned value which should be an AST node 
+                # But treat method and function calls as if they were an allocated object
+                if cnr != "expression_call" and cnr != "expression_method":
+                    rhs_val = self._current_scope.lookup(rhs)
+                    if rhs_val: 
+                        rv = rhs_val._assigned_value
+            # if it's rhs' first time being rhs, assign it a reference list
+            if not hasattr(rv, "_references"):
+                rv._references = []
+            # append lhs to rhs' reference list
+            rv._references.append(lhs)
+            # make rhs (The AST node) lhs' assigned value
+            lhs_val._assigned_value = rv
+
+
+
+    def _rhs_exprresion_attribute_assign_aux(self, rv):
+        print("IAHSFJIABFHJASFHaJKSFHAJK DYYYYYYIIIIIIIINNNNGGGGGG AOSDJKAsJDLAKSJDLJKJKSD")
+        pass
+
+
+
+
+
     def _cleanup(self, t):
         self._free_list(self._collect_variables(t))
 
@@ -555,18 +685,39 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def _collect_variables(self, t):
         # should be all variables with a reference count > 0
-        print(t)
         variables_to_not_free = []
-        if t.exp.type not in PRIM_TYPES: # and len(t._references) > 0:
+        
+        if t.exp.type not in PRIM_TYPES:
             variables_to_not_free.append(t.exp.identifier)
 
         variables_to_free = {}
         for elem, info in self._current_scope._tab.items():
             if (info.cat != NameCategory.PARAMETER and info.type not in PRIM_TYPES and 
-                elem != NameCategory.THIS and elem not in variables_to_not_free): # and len(t._references) > 0:
+                elem != NameCategory.THIS and elem not in variables_to_not_free and 
+                self._only_one_or_local_refs(elem, info)):
                 variables_to_free[elem] = info
+                # puts all references to the object elem has been assigned into the 
+                # variables_to_not_free list such that double frees don't occur
+                if hasattr(info, "_assigned_value"):
+                    variables_to_not_free.append(x for x in info._assigned_value._references)
+                if hasattr(info, "_attr_assigned_value"):
+                    # FIXME - add attributes to variables not to free
+                    pass
         return variables_to_free
     
+    def _only_one_or_local_refs(self, elem, info):
+        # check whether _attr_assigned_value prevents freeing the memory
+        # or if _assigned_value prevents freeing the memory
+        print(elem)
+        #(not len(info._assigned_value._references) > 1) and self._all_refs_in_scope(elem, info)
+        return True
+
+    def _all_refs_in_scope(self, elem, info):
+        references = info._assigned_value._references
+        for ref in references:
+            if ref not in self._current_scope._tab:
+                return False
+        return True
 
     def _free_object(self, key, type, label):
         if type[-1:] == "*": # if type is a pointer to an instance
