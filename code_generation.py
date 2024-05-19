@@ -120,16 +120,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.ASSIGN, t.lhs + self._current_scope.lookup(t.lhs).label))
-        if cnl  == "expression_array_indexing" or cnl == "expression_attribute":
+        if cnl  == "expression_array_indexing" and (cnl == "expression_attribute" and not cnl == "expression_new_instance"):
             self._app(Ins(Op.INDENT))
-        
+
     def postVisit_statement_assignment(self, t):
-        cn = t.rhs.__class__.__name__
+        cnr = t.rhs.__class__.__name__
         cnl = t.lhs.__class__.__name__
         # else the expression will do so automatically when visisted by the visitor
-        if not isinstance(t.lhs , str) and cnl != "expression_attribute":
+        if not isinstance(t.lhs , str) and not (cnl == "expression_attribute" and not cnl == "expression_new_instance"):
             self._app(Ins(Op.ASSIGN, ''))
-        if not cn == "expression_new_instance":
+        if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
             self._app(Ins(Op.RAW, ";"))
        
@@ -328,7 +328,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             identifier = f"{identifier[0]}->{identifier[1]}"
         else:
             identifier = t.identifier + self._current_scope.lookup(t.identifier).label
-
+            pass
         self._app(Ins(Op.ASSIGN, identifier))
         self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
         self._app(Ins(Op.RAW, ";"))
@@ -612,23 +612,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             
             rv = t.rhs 
             if cnr == "expression_attribute":
-                # Get assinged value for attribute
-
-
-                pass
+                rv = self._rhs_exprresion_attribute_assign_aux(rv)
             else:            
                 if cnr != "expression_call" and cnr != "expression_method":
                     rhs_val = self._current_scope.lookup(rhs)
-                    if rhs_val: 
-                        rv = rhs_val._attr_assigned_value
+                    if rhs_val and rhs_val.cat != NameCategory.PARAMETER: 
+                        rv = rhs_val._attr_assigned_value[field]
             if not hasattr(rv, "_references"):
                 rv._references = {}
             if field not in rv._references:
                 rv._references[field] = []  
             rv._references[field].append((lhs, field))
             lhs_val._attr_assigned_value[field] = rv
-
-
         else: # lhs = Identifier or expression_array_indexing
             lhs_val = self._current_scope.lookup(lhs)        
             # removes lsh from lhs' assigned value's reference list
@@ -656,25 +651,20 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 # But treat method and function calls as if they were an allocated object
                 if cnr != "expression_call" and cnr != "expression_method":
                     rhs_val = self._current_scope.lookup(rhs)
-                    if rhs_val: 
+                    if rhs_val and rhs_val.cat != NameCategory.PARAMETER: 
                         rv = rhs_val._assigned_value
             # if it's rhs' first time being rhs, assign it a reference list
             if not hasattr(rv, "_references"):
                 rv._references = []
+
             # append lhs to rhs' reference list
             rv._references.append(lhs)
             # make rhs (The AST node) lhs' assigned value
             lhs_val._assigned_value = rv
 
-
-
     def _rhs_exprresion_attribute_assign_aux(self, rv):
-        print("IAHSFJIABFHJASFHaJKSFHAJK DYYYYYYIIIIIIIINNNNGGGGGG AOSDJKAsJDLAKSJDLJKJKSD")
+        print("GARBAGE COLLECTION FOR ATTRIBUTES NOT IMPLEMENTED")
         pass
-
-
-
-
 
     def _cleanup(self, t):
         self._free_list(self._collect_variables(t))
@@ -708,7 +698,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def _only_one_or_local_refs(self, elem, info):
         # check whether _attr_assigned_value prevents freeing the memory
         # or if _assigned_value prevents freeing the memory
-        print(elem)
         #(not len(info._assigned_value._references) > 1) and self._all_refs_in_scope(elem, info)
         return True
 

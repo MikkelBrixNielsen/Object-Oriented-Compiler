@@ -131,6 +131,15 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         self._extension_instance(t)
         self._current_scope = t.symbol_table
 
+    def preVisit_instance_expression_list(self, t):
+         # generate temp label
+        if not hasattr(t, "temp_label"):
+            t.temp_label = LabelGenerator._generate()
+
+# auxiliaries
+    def midVisit_class_descriptor(self, t):
+        self._extend_class(t)
+
     def _extension_instance(self, t):        
         current = self._current_scope.lookup(t.struct)
         while len(current.info[2]) > 0:
@@ -151,9 +160,6 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
             #        super.info[0][i] = (super.info[0][i][0], super.info[0][i][1], LabelGenerator._generate())
             #        print(super.info[0])
             current = self._current_scope.lookup(current.info[2][0])
-
-    def midVisit_class_descriptor(self, t):
-        self._extend_class(t)
 
     def _extend_class(self, t):
         # currently there can only be one extension so it is fine to 
