@@ -10,7 +10,7 @@ from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-__version__ = "0.5.7"
+__version__ = "0.5.8"
 
 # MAIN
 def compiler(showSource, showAST, input_file, output_file):
@@ -67,13 +67,14 @@ def compiler(showSource, showAST, input_file, output_file):
     the_program = interfacing_parser.the_program
 
     if showSource or showAST:
-        if showAST:
+        #if showAST:
             # Print AST tree in dot format:
-            pp = ASTTreePrinterVisitor()
+            #pp = ASTTreePrinterVisitor()
 
-        the_program = the_program.body  # Remove artificial outer global.
-        the_program.accept(pp)
-        return pp.getPrettyProgram()
+        #the_program = the_program.body  # Remove artificial outer global.
+        #the_program.accept(pp)
+        #eturn pp.getPrettyProgram()
+        pass
     else:
         # Collect names of functions, parameters, and local variables:
         symbols_collector = ASTSymbolVisitor()
@@ -100,7 +101,7 @@ def compiler(showSource, showAST, input_file, output_file):
         return code
 
 def main(argv):
-    usage = f"Usage: {sys.argv[0]} [-hvsm] [-i source_file] [-o target_file]"
+    usage = f"Usage: {sys.argv[0]} [-hvs] [-i source_file] [-o target_file]"
     help_text = """
     -h  Print this help text.
 
@@ -108,12 +109,11 @@ def main(argv):
 
     -s  Print back the parsed source code instead of target code.
 
-    -a  Print the AST in dot format instead of target code.
-
     -i source_file  Set source file; default is stdin.
 
     -o target_file  Set target file; default is stdout.
     """
+    #-a  Print the AST in dot format instead of target code.
     input_file = ""
     output_file = ""
     show_source = False

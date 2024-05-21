@@ -136,3 +136,19 @@ class ASTTreePrinterVisitor(VisitorsBase):
         self._edge(t.dotnum, t.exp.dotnum)
         if t.next:
             self._edge(t.dotnum, t.next.dotnum)
+
+    def postVisit_expression_new_instance(self, t):
+        t.dotnum = self._next()
+        self._node(f"id: {t.struct}", t.dotnum)
+        if t.params:
+            self._edge(t.dotnum, t.params.dotnum)
+        self._edge(t.dotnum, t.struct.dotnum)
+        self._edge(t.dotnum, t.params.dotnum)
+
+    def postVisit_instance_expression_list(self, t):
+        self. postVisit_expression_list(t)
+        t.dotnum = self._next()
+        self._node("exp_list", t.dotnum)
+        self._edge(t.dotnum, t.exp.dotnum)
+        if t.next:
+            self._edge(t.dotnum, t.next.dotnum)

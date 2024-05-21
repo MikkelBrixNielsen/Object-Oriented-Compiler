@@ -708,25 +708,27 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 return False
         return True
 
-    def _free_object(self, key, type, label):
+    def _free_object(self, key, type, label, prev=""):
         if type[-1:] == "*": # if type is a pointer to an instance
             cd = self._current_scope.lookup_all(type[:-1])
-            self._free_instance_variables(key, cd, label)
+            self._free_instance_variables(key, cd, label, prev)
         else: # type is pointer to some array
-            self._free_array(key, type, label)
+            self._free_array(key, type, label, prev)
 
-    def _free_instance_variables(self, key, cd, label):
+    def _free_instance_variables(self, key, cd, label, prev=""):
+        prev = prev + key + label
         # free attributes for given instance
         for attr in cd.info[0]:
             if attr[1] not in PRIM_TYPES:
                 self._free_object(*attr)
         # free extension and its attributes if there is one 
         if len(cd.info[2]) > 0:
-            self._free_object(cd.info[2][0], cd.info[2][0] + "*", cd.info[2][1])
+            current = cd.info[2][0].lower()
+            self._free_object(current, cd.info[2][0] + "*", cd.info[2][1], prev + "->")
         # free instance itself
-        self._app(Ins(Op.FREE, key + label))
+        self._app(Ins(Op.FREE, prev))
 
-    def _free_array(self, key, type, label):
+    def _free_array(self, key, type, label, prev=""):
         self._app(Ins(Op.INDENT))
         self._app(Ins(Op.RAW, f"// Free({key + label})\n"))
         pass
