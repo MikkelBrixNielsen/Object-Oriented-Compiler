@@ -100,9 +100,13 @@ class Emit:
                     self.indent_level -= 1
                     self._add("};\n")
                 case Op.VARLIST:
-                    self._create_varlist(instr)
+                    self._create_varlist(instr, True)
+                case Op.ATTRLIST:
+                    self._create_varlist(instr, False)
                 case Op.PARAMS:
                     self._addParam(instr)
+                case Op.TEMP:
+                    self._create_varlist(instr, False)
                 case Op.ASSIGN:
                     self._raw(f"{instr.args[0]} = ")
                 case Op.ATTRASSIGN:
@@ -216,10 +220,16 @@ class Emit:
             current = current.next
         return s    
     
-    def _create_varlist(self, instr):
+    def _create_varlist(self, instr, defval=False):
         s = self._get_stars(instr.args[2]) + instr.args[0]
-        #if instr.args[2] not in PRIM_TYPES:
-        #    s += " = " + self._generate_default_value(instr.args[2])
+        if instr.args[2] not in PRIM_TYPES and defval:
+            s += " = " + self._generate_default_value(instr.args[2])
+        if instr.args[1]:
+            s += ","
+        self._raw(" " + s)
+    
+    def _create_temp_var(self, instr):
+        s = self._get_stars(instr.args[2]) + instr.args[0]
         if instr.args[1]:
             s += ","
         self._raw(" " + s)

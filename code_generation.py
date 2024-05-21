@@ -32,6 +32,7 @@ class Op(Enum):
     THIS = auto()
     ATTRASSIGN = auto()
 
+    ATTRLIST = auto()
     VARLIST = auto()
     PARAMS = auto()
     ASSIGN = auto()
@@ -53,6 +54,7 @@ class Op(Enum):
     ALLOCEND = auto()
     MEMCHECK = auto()
     DEFAULTVAL = auto()
+    TEMP = auto()
 
 
 
@@ -106,7 +108,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_statement_assignment(self, t):
         self._assign_cleanup(t)
         self._app(Ins(Op.TYPE, t.rhs.type))
-        self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.rhs.type))
+        self._app(Ins(Op.TEMP, "TEMP" + t.temp_label, None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
         # self._cleanup # or something similar
         
@@ -120,14 +122,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
             self._app(Ins(Op.ASSIGN, t.lhs + self._current_scope.lookup(t.lhs).label))
-        if cnl  == "expression_array_indexing" and (cnl == "expression_attribute" and not cnl == "expression_new_instance"):
+        if cnl  == "expression_array_indexing" and (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
             self._app(Ins(Op.INDENT))
+        elif cnl == "expression_attribute" and cnr == "expression_identifier":
+            self._app(Ins(Op.INDENT))
+
 
     def postVisit_statement_assignment(self, t):
         cnr = t.rhs.__class__.__name__
         cnl = t.lhs.__class__.__name__
-        # else the expression will do so automatically when visisted by the visitor
-        if not isinstance(t.lhs , str) and not (cnl == "expression_attribute" and not cnl == "expression_new_instance"):
+        # if lhs isn't a string then expression will print itself
+        if not isinstance(t.lhs , str) and (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
             self._app(Ins(Op.ASSIGN, ''))
         if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
@@ -135,7 +140,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
        
     def preVisit_statement_return(self, t):
         self._app(Ins(Op.TYPE, t.exp.type))
-        self._app(Ins(Op.VARLIST, "TEMP" + t.temp_label, None, t.exp.type))
+        self._app(Ins(Op.TEMP, "TEMP" + t.temp_label, None, t.exp.type))
         self._app(Ins(Op.ASSIGN, ''))
 
 
@@ -230,7 +235,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, ";"))
 
     def preVisit_attributes_list(self, t):
-        self._app(Ins(Op.VARLIST, t.variable + t.label, t.next, t.type))
+        self._app(Ins(Op.ATTRLIST, t.variable + t.label, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
         self._app(Ins(Op.RAW, t.identifier + t.label))
@@ -435,7 +440,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             name = name + current.info[2][1]
             type = current.info[2][0] + "*"
             self._app(Ins(Op.TYPE, type))
-            self._app(Ins(Op.VARLIST, var, None, type))
+            self._app(Ins(Op.TEMP, var, None, type))
             self._app(Ins(Op.RAW, " = "))  
             self._app(Ins(Op.ALLOC, type, type[:-1]))
             self._app(Ins(Op.MEMCHECK, var))
@@ -461,7 +466,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     ins2 = self._code.pop()
                     var1 = attr[1][:-1].lower() + t.temp_label
                     self._app(Ins(Op.TYPE, attr[1]))
-                    self._app(Ins(Op.VARLIST, var1, None, attr[1]))
+                    self._app(Ins(Op.TEMP, var1, None, attr[1]))
                     self._app(Ins(Op.RAW, " = "))  
                     self._app(Ins(Op.ALLOC, attr[1], attr[1][:-1]))
                     self._app(Ins(Op.MEMCHECK, var1))
@@ -484,7 +489,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             for ext in cd.info[2][0]:
                 name = ext.lower()
                 self._app(Ins(Op.TYPE, ext))
-                self._app(Ins(Op.VARLIST, "*" + name + cd.info[2][1], None, None))
+                self._app(Ins(Op.TEMP, "*" + name + cd.info[2][1], None, None))
                 self._app(Ins(Op.RAW, ";"))
         self._app(Ins(Op.CLASSMID, t.name))
         if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
@@ -516,7 +521,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def _generate_attribute_labeled_identifier(self, t):
         idt = [t.inst, t.field]
         if idt[0] == "this":
-            # this has not label so it remains unchanged
+            # this has no label so it remains unchanged
             # find field label
             val = self._current_scope.lookup_class(NameCategory.THIS)
             cd = self._current_scope.lookup_all(val.cat)
@@ -588,79 +593,71 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
 
     def _assign_cleanup(self, t):
-        # primitive type should not be freed so no point in keeping count of their references 
+        def get_rhs_value(rhs, cnr):
+            """ Retrieve the appropriate value for the rhs. """
+            rhs_val = self._current_scope.lookup(rhs)
+            if cnr == "expression_attribute":
+                rhs, field = rhs
+                if rhs_val and rhs_val.cat != NameCategory.PARAMETER:
+                    return rhs_val.attr_assigned_value[field], field
+            elif cnr not in {"expression_call", "expression_method"}:
+                if rhs_val and rhs_val.cat != NameCategory.PARAMETER:
+                    return rhs_val._assigned_value, None
+            return t.rhs, None
+
         if t.rhs.type in PRIM_TYPES:
             return
-        
-        cnl = t.lhs.__class__.__name__
-        cnr = t.rhs.__class__.__name__
-        lhs = _get_identifier(t.lhs)
-        rhs = _get_identifier(t.rhs)
 
-        if cnl == "expression_attribute":
-            lhs, field = lhs
+        lhs_class = t.lhs.__class__.__name__
+        rhs_class = t.rhs.__class__.__name__
+        lhs_id = _get_identifier(t.lhs)
+        rhs_id = _get_identifier(t.rhs)
+
+        if lhs_class == "expression_attribute":
+            lhs, field = lhs_id
             lhs_val = self._current_scope.lookup(lhs)
-            # store information regarding what an attribute has been assigned 
-            # on the identifier for the instance they are a part of
-            if hasattr(lhs_val, f"_attr_assigned_value"):
-                lhs_val._attr_assigned_value[field]._references[field].remove((lhs, field))
-                if (lhs_val._attr_assigned_value[field].type not in PRIM_TYPES and
-                    len(lhs_val._attr_assigned_value[field]._references[field]) < 1):
-                    self._app(Ins(Op.FREE, lhs))
+
+            if hasattr(lhs_val, "_attr_assigned_value"):
+                assigned_value = lhs_val._attr_assigned_value.get(field)
+                if assigned_value:
+                    assigned_value._references[field].remove((lhs, field))
+                    if assigned_value.type not in PRIM_TYPES and len(assigned_value._references[field]) == 0:
+                        # if assigned_value is identifier call free object which frees it if it has no other references
+                        idt = self._generate_attribute_labeled_identifier(self, t.lhs)
+                        self._app(Ins(Op.FREE, idt[0] + "->" + idt[1]))
             else:
                 lhs_val._attr_assigned_value = {}
-            
-            rv = t.rhs 
-            if cnr == "expression_attribute":
-                rv = self._rhs_exprresion_attribute_assign_aux(rv)
-            else:            
-                if cnr != "expression_call" and cnr != "expression_method":
-                    rhs_val = self._current_scope.lookup(rhs)
-                    if rhs_val and rhs_val.cat != NameCategory.PARAMETER: 
-                        rv = rhs_val._attr_assigned_value[field]
-            if not hasattr(rv, "_references"):
-                rv._references = {}
-            if field not in rv._references:
-                rv._references[field] = []  
-            rv._references[field].append((lhs, field))
-            lhs_val._attr_assigned_value[field] = rv
-        else: # lhs = Identifier or expression_array_indexing
-            lhs_val = self._current_scope.lookup(lhs)        
-            # removes lsh from lhs' assigned value's reference list
-            if hasattr(lhs_val, "_assigned_value"):
-                # remove lhs as reference
-                lhs_val._assigned_value._references.remove(lhs)
-                if (lhs_val._assigned_value.type not in PRIM_TYPES and
-                    len(lhs_val._assigned_value._references) < 1):
-                    # free identifier
-                    self._app(Ins(Op.FREE, lhs))
 
-            # the value that should be assigned 
-            # should be AST node for a new instance 
-            # / allocation / func. call / meth. call
-            rv = t.rhs 
-            if cnr == "expression_attribute":
-                rv = self._rhs_exprresion_attribute_assign_aux(rv)
-                # retrieve AST node from where attributes save their assigned value
-                # This will probably need to be saved on the identifier for the instance the attribute belongs to
-                # Maybe even put a dict there so its more like lookup(t.inst)[_t.field] -> assigned_value
-                # rv = lookup(t.inst)._t.field_assigned_value (or something)
-            else:            
-                # if rhs is an entry in symbol table then it is not an 
-                # AST node so get its assigned value which should be an AST node 
-                # But treat method and function calls as if they were an allocated object
-                if cnr != "expression_call" and cnr != "expression_method":
-                    rhs_val = self._current_scope.lookup(rhs)
-                    if rhs_val and rhs_val.cat != NameCategory.PARAMETER: 
-                        rv = rhs_val._assigned_value
-            # if it's rhs' first time being rhs, assign it a reference list
+            rv, field = get_rhs_value(rhs_id, rhs_class)
+
+            if not hasattr(rv, "_references"):
+                rv._references = {} if rhs_class == "expression_attribute" else []
+
+            if rhs_class == "expression_attribute":
+                if field not in rv._references:
+                    rv._references[field] = []
+      
+                rv._references[field].append((lhs, field))
+                lhs_val._attr_assigned_value[field] = rv
+            else:
+                rv._references.append((lhs, field))
+                lhs_val._attr_assigned_value[field] = rv
+        else:
+            lhs_val = self._current_scope.lookup(lhs_id)
+            if hasattr(lhs_val, "_assigned_value"):
+                assigned_value = lhs_val._assigned_value
+                assigned_value._references.remove(lhs_id)
+                if assigned_value.type not in PRIM_TYPES and len(assigned_value._references) == 0:
+                    self._app(Ins(Op.FREE, lhs_id + self._current_scope.lookup(lhs_id).label))
+
+            rv, _ = get_rhs_value(rhs_id, rhs_class)
+
             if not hasattr(rv, "_references"):
                 rv._references = []
 
-            # append lhs to rhs' reference list
-            rv._references.append(lhs)
-            # make rhs (The AST node) lhs' assigned value
+            rv._references.append(lhs_id)
             lhs_val._assigned_value = rv
+
 
     def _rhs_exprresion_attribute_assign_aux(self, rv):
         print("GARBAGE COLLECTION FOR ATTRIBUTES NOT IMPLEMENTED")
@@ -682,27 +679,28 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
         variables_to_free = {}
         for elem, info in self._current_scope._tab.items():
-            if (info.cat != NameCategory.PARAMETER and info.type not in PRIM_TYPES and 
+            if (info.cat not in [NameCategory.PARAMETER, NameCategory.FUNCTION] and  
                 elem != NameCategory.THIS and elem not in variables_to_not_free and 
-                self._only_one_or_local_refs(elem, info)):
+                self._all_refs_in_scope(elem, info) and info.type not in PRIM_TYPES):
                 variables_to_free[elem] = info
                 # puts all references to the object elem has been assigned into the 
                 # variables_to_not_free list such that double frees don't occur
                 if hasattr(info, "_assigned_value"):
                     variables_to_not_free.append(x for x in info._assigned_value._references)
                 if hasattr(info, "_attr_assigned_value"):
-                    # FIXME - add attributes to variables not to free
-                    pass
+                    for key, val in info._attr_assigned_value.items():
+                        variables_to_not_free.append(x for x in val._references)
         return variables_to_free
     
-    def _only_one_or_local_refs(self, elem, info):
-        # check whether _attr_assigned_value prevents freeing the memory
-        # or if _assigned_value prevents freeing the memory
-        #(not len(info._assigned_value._references) > 1) and self._all_refs_in_scope(elem, info)
-        return True
-
     def _all_refs_in_scope(self, elem, info):
-        references = info._assigned_value._references
+        references = []
+        if hasattr(info, "_assigned_value"):
+            references = references + info._assigned_value._references
+            
+        #if hasattr(info, "_attr_assigned_value"):
+        #    for key, val in info._attr_assigned_value.items():
+        #        references.append(x for x in val._references)
+        
         for ref in references:
             if ref not in self._current_scope._tab:
                 return False
@@ -720,7 +718,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         # free attributes for given instance
         for attr in cd.info[0]:
             if attr[1] not in PRIM_TYPES:
-                self._free_object(*attr)
+                self._free_object(*attr, prev + "->")
         # free extension and its attributes if there is one 
         if len(cd.info[2]) > 0:
             current = cd.info[2][0].lower()
