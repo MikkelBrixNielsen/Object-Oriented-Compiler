@@ -10,7 +10,7 @@ from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-__version__ = "1.0.0"
+__version__ = "0.5.6"
 
 # MAIN
 def compiler(showSource, showAST, macOS, input_file, output_file):
@@ -22,16 +22,25 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         and it builds an abstract syntax tree (AST).
 
     symbol collection:
-        collects function, parameter, and variables names, and stores these
-        in a symbol table.
+        collects function, parameter, classes and variables names, and stores these
+        in a symbol table. It also handles adding types to AST nodes.
+    
+    Type checking:
+        checks variables type are defiend in the case of classes. Function type matching
+        the type of the return expression. Array elements match type of array. Type of 
+        expression matches variable it is assinged to. 
+
+    Label generation:
+        generates labels for the identifiers, temp variables, attributes, etc. and stores
+        them in a mix of the symbol table along with the variable it belongs to and the
+        AST node which generates the label.
 
     code generation:
-        from the AST and symbol table, code is produced in an intermediate
-        representation, quite close to the final assembler code.
+        from the AST and symbol table, instructions are produced in an intermediate
+        representation which mimic the final C code quite closely.
 
     emit:
-        the slightly abstract intermediate code is transformed to assembler
-        code, in a macOS variant if the option is used.
+        the slightly abstract instruction forming the intermediate code is transformed to C code.
     """
 
     # Read and verify ASCII input:
@@ -70,11 +79,11 @@ def compiler(showSource, showAST, macOS, input_file, output_file):
         symbols_collector = ASTSymbolVisitor()
         the_program.accept(symbols_collector)
 
-        # Type check use of functions, parameters, and local variables:
+        # Type check use of functions, parameters, local variables, classes, arrays:
         type_checker = ASTTypeCheckingVisitor()
         the_program.accept(type_checker)
 
-        # Generate Labels for variables, functions, methods
+        # Generate Labels for variables, functions, methods, attributes
         label_generator = ASTLabelGeneratorVisitor()
         the_program.accept(label_generator)
 
@@ -101,8 +110,6 @@ def main(argv):
 
     -a  Print the AST in dot format instead of target code.
 
-    -m  Generate assembly code for macOS.
-
     -i source_file  Set source file; default is stdin.
 
     -o target_file  Set target file; default is stdout.
@@ -111,7 +118,6 @@ def main(argv):
     output_file = ""
     show_source = False
     show_ast = False
-    macOS = False
     try:
         opts, args = getopt.getopt(argv, "hsamvi:o:")
     except getopt.GetoptError:
@@ -130,8 +136,6 @@ def main(argv):
                 show_source = True
             case "-a":
                 show_ast = True
-            case "-m":
-                macOS = True
             case "-i":
                 input_file = arg
             case "-o":
