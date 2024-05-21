@@ -10,10 +10,10 @@ from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-__version__ = "0.5.6"
+__version__ = "0.5.7"
 
 # MAIN
-def compiler(showSource, showAST, macOS, input_file, output_file):
+def compiler(showSource, showAST, input_file, output_file):
     """This function goes through the classic phases of a modern compiler,
     each phase organized in its own module. The phases are:
 
@@ -140,7 +140,7 @@ def main(argv):
                 input_file = arg
             case "-o":
                 output_file = arg
-    result = compiler(show_source, show_ast, macOS, input_file, output_file)
+    result = compiler(show_source, show_ast, input_file, output_file)
     if output_file:
         f = open(output_file, "w")
         f.write(result)
