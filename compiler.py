@@ -10,7 +10,7 @@ from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-__version__ = "0.5.8"
+__version__ = "0.6.0"
 
 # MAIN
 def compiler(showSource, showAST, input_file, output_file):

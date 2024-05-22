@@ -359,12 +359,14 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_attribute(self, t):
         cd = None
         var = t.inst
-        if t.inst == "this":
+        if t.inst == "this": # can only happen in classes
             inst = self._current_scope.lookup(NameCategory.THIS).cat
             cd = self._current_scope.lookup_all(inst)
         else:
-            cd = self._current_scope.lookup_all(self._current_scope.lookup_all(t.inst).type[:-1])
-            var = t.inst + self._current_scope.lookup(t.inst).label
+            val = self._current_scope.lookup_all(t.inst)
+            cd = self._current_scope.lookup_all(val.type[:-1])
+            label = self._current_scope.lookup(t.inst).label if val.cat != NameCategory.PARAMETER else ""
+            var = t.inst + label
 
         member = self._find_member_in_tuple_list((t.field, t.type), cd.info[0])
         if member: # is attr member of cd
