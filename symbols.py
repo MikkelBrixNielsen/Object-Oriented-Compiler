@@ -26,12 +26,11 @@ class SymVal():
     """The information for a name (symbol) is its category together ith
        supplementary information.
     """
-    def __init__(self, cat, type, level, info, assigned_value = None):
+    def __init__(self, cat, type, level, info):
         self.cat = cat
         self.type = type
         self.level = level
         self.info = info
-        self.assigned_value = assigned_value
 
 class SymbolTable:
     def __init__(self, parent):
