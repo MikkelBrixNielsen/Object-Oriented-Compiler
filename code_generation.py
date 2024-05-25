@@ -69,9 +69,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def __init__(self):
         self._current_scope = None
         self._code = []
-        #self._labels = LabelTable(None)
-        #self._temp_labels = LabelTable(None)
-        #self._comp_labels = LabelTable(None)
 
     def get_code(self):
         return self._code
@@ -79,18 +76,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # creates and enters a new scope
     def _enter_new_scope(self, t):
         self._current_scope = t.symbol_table
-        # FIXME REMOVE RETURN WHEN ACTIVATING LABLE GENERATION PHASE 
-        #self._labels = t._labels
-        #self._temp_labels = t._temp_labels 
-        #self._comp_labels = t._comp_labels
     
     # exits the current scope and goes to parent scope
     def _exit_current_scope(self, t):
         self._current_scope = self._current_scope.parent
-        # FIXME REMOVE RETURN WHEN ACTIVATING LABLE GENERATION PHASE 
-        #self._labels = self._labels.parent
-        #self._temp_labels = self._temp_labels.parent
-        #self._comp_labels = self._comp_labels.parent
 
     def _app(self, instruction):
         self._code.append(instruction)
@@ -404,10 +393,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def postVisit_expression_method(self, t):
         self.postVisit_expression_call(t)
 
-    #def preVisit_array_list(self, t):
-    #    s = " " + (t.variable)
-    #    self._app(Ins(Op.ASSIGN, s))
-    
     def preVisit_expression_new_array(self, t):
         self._app(Ins(Op.ALLOCSTART, t.type))
 
@@ -481,10 +466,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             prev = var
             current = self._current_scope.lookup_all(current.info[2][0])
 
-    # FIXME Make it so code is generated for the extensions 
-    # FIXME - NOT VERY MAINTAINABLE... I MEAN I PROBABLY DON'T EVEN KNOW WHAT IT IS SUPPOSED TO DO ANYMORE
-    # FIXME - Variables inherited should become a special version associated with a "virtual" instance of the extension e.g. Second has attr a, so in Third there will be a Second_a attr and for Seconds get_a Third will return Second_a
-    # or it might be possible to include an actual instance of Second in third and just use the methods already defined for second which are in the global scope already
     def _extend_class(self, t):
         cd = self._current_scope.lookup_all(t.name)
         if len(cd.info[2]) > 0: # len > 0 => extension exists

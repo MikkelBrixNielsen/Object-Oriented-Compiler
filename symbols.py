@@ -199,10 +199,6 @@ class ASTSymbolVisitor(VisitorsBase):
             t.next.type = t.type
         _record_variables(self, t, NameCategory.VARIABLE, t.type)
 
-    # FIXME make class declaration the descriptor and give class 
-    # FIXME declaration in lexer a class body instead of descriptor???
-    # FIXME - Eliminate recursive extensions by only allowing a 
-    # FIXME - class to extend an already defined class
     def preVisit_class_declaration(self, t):
         if self._current_scope.lookup_this_scope(t.name):
             error_message("Symbol Collection",
@@ -260,14 +256,6 @@ class ASTSymbolVisitor(VisitorsBase):
         t.decl.type = t.type
         if t.next:
             t.next.name = t.name
-
-    # FIXME - (MIGHT BE) useless code that can just be deleted since arrays in classes are just pointers now 
-    # so no size is needed and therefore no point in checking whether its is static since the array will be 
-    # dynamically allocated later anyway if it is ever initialized.
-    #def postVisit_attributes_declaration_list(self, t):
-    #    if hasattr(t.decl, "exp"):
-    #        if hasattr(t.decl.exp, "size"):
-    #            self._check_size_is_static(t.decl.exp.size, t.decl.lineno)
 
     def preVisit_attributes_list(self, t):
         if t.next:
@@ -372,13 +360,6 @@ class ASTSymbolVisitor(VisitorsBase):
             if val:
                 t.exp.type = val.type
 
-    # Probably just delete this since it is taken care of through variables_declaration_list now but mention it existed in the report
-    #def preVisit_array_list(self, t):
-    #    if t.name: # the array is an attribute on a class if it has a name
-    #        value = self._current_scope.lookup(t.name)
-    #        value.info[0].append((t.variable, t.type))
-    #    _record_variables(t, NameCategory.ARRAY, t.exp.size, t.name) #t.exp.data, t.exp.size, t.name)
-
     def postVisit_expression_array_indexing(self, t):
         ident = _get_identifier(t.identifier)
         name = ident if not isinstance(ident, tuple) else ident[0]
@@ -422,14 +403,7 @@ class ASTSymbolVisitor(VisitorsBase):
              error_message("Symobl Collection",
                           f"Array access using result of creating new array not allowed.",
                           t.lineno)
-        #elif t.type[-1:] == "*":
-        #     error_message("Symobl Collection",
-        #                  f"Array does not support user defiend type '{t.type[:-1]}'.",
-        #                  t.lineno)    
-    # TODO - Make this.<attr> syntax to differentiate between global variable, parameters, and class attributes
-    # TODO - Make new syntax work to create class instances 
-    # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
-
+    
 # Auxiliaries
 def _not_anonymous(t, stm):
     if t.exp.__class__.__name__ in ["expression_new_instance", "expression_new_array"]:
@@ -553,21 +527,7 @@ def _get_identifier(t):
             error_message("Symbol Collection",
                           f"_get_identifier does not implement {t.__class__.__name__}",
                           -1)
-            
-# if code for array list is deleted then delete this as well but mention in report that this was something that existed                
-#def _check_size_is_static(self, t, lineno):
-#    match t.__class__.__name__:
-#        case "expression_integer" | "expression_bool" | "expression_binop": # only allow non-variable parameters as the size on class attribute arrays when initialzing them
-#            pass
-#        case "expression_float" | "expression_char":
-#            error_message("Symbol Collection",
-#                          "Non-integer types cannot be used to initialize the size of an array.",
-#                          lineno)
-#        case _:
-#            error_message("Symbol Collection",
-#                          "variable-sized parameters cannot be used to initialize arrays in classes.",
-#                          lineno)
-                
+             
 # check whether a type given is defined            
 def _check_if_user_type_exists(self, type, lineno):
     base_type = type.replace("[]", "").replace("*", "")
