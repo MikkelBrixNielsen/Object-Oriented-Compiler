@@ -201,17 +201,14 @@ class ASTSymbolVisitor(VisitorsBase):
 
     # FIXME make class declaration the descriptor and give class 
     # FIXME declaration in lexer a class body instead of descriptor???
+    # FIXME - Eliminate recursive extensions by only allowing a 
+    # FIXME - class to extend an already defined class
     def preVisit_class_declaration(self, t):
         if self._current_scope.lookup_this_scope(t.name):
             error_message("Symbol Collection",
                           f"Redeclaration of class '{t.name}'.",
                           t.lineno)
-        if t.name[0].upper() != t.name[0]:
-            error_message("Symbol Collection",
-                          f"Class names must be capitalized.",
-                          t.lineno)
-        # FIXME - Eliminate recursive extensions by only allowing a 
-        # FIXME - class to extend an already defined class
+ 
         extensions = []
         if t.extends:
             extensions.append(t.extends)
