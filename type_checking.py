@@ -30,8 +30,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     def postVisit_statement_assignment(self, t):
         lhs = None
+        name = _get_identifier(t.lhs)
         if t.lhs.__class__.__name__ == "expression_attribute":
             lhs = self._exist_membership(t.lhs, "attribute")
+            name = name[0] + "." + name[1]
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
             ident = _get_identifier(t.lhs.identifier)
             ident = ident if not isinstance(ident, tuple) else ident[0]
@@ -42,10 +44,10 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             lhs = self._current_scope.lookup(t.lhs)
             if lhs:
                 lhs = [t.lhs, lhs.type, lhs.cat]
-
+        
         if not lhs:
             error_message("Type Checking",
-                          f"Variable '{t}' not found.",
+                          f"Variable '{name}' not found.",
                           t.lineno)
         if lhs[2] == NameCategory.FUNCTION:
             error_message("Type Checking",
@@ -56,7 +58,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         t_rhs = self._get_type(t.rhs)
         cnr = t.rhs.__class__.__name__
 
-        if not t_lhs == t_rhs and not (t_lhs == "int" and t_rhs == "float" or t_lhs == "float" and t_rhs == "int"):
+        if not t_lhs == t_rhs:
             if cnr == "expression_call" or cnr == "expression_method":
                 self._function_type_match_return_type(self._current_scope.lookup(t.rhs.name).info)
             error_message("Type Checking",
@@ -182,16 +184,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_group(self, t):
         t.type = t.exp.type
 
-    #def preVisit_array_list(self, t):
-    #    if not str(t.type[:-2]) == t.exp.type:
-    #        error_message("Type Checking",
-    #                      f"Type mismatch assigning array of type {t.exp.type} to array of type {t.type}.",
-    #                      t.lineno)
-            
-    #def postVisit_array_list(self, t):
-    #    val = self._current_scope.lookup(t.variable)
-    #    val.info[-2] = AST.expression_integer(self._get_value_of_binop(val.info[-2]), t.lineno)
-
     def preVisit_expression_new_array(self, t):
         self.number_of_actual_parameters.append(0)
 
@@ -200,18 +192,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Array size has to be an integer.",
                           t.lineno)
-        # relics from when expression new arrays had data    
-        #self._check_array_elements_match_type(t)
-        #num_params = self.number_of_actual_parameters.pop()
-        #needed =  self._get_value_if_any(t, t.lineno)
-        # if there is an actual size to get this will be true and it will be compared
-        # with num_params otherwise the size might be variable and first known at runtime 
-        # which we cannot do much about
-        #if needed[0]: 
-        #    if num_params > needed[1]:
-        #        error_message("Type Checking",
-        #                      f"Too many elements given to array, recieved {num_params} expected at most {needed[1]}.",
-        #                      t.lineno)
         t.type = t.type + "[]"
 
     # FIXME - if attribute array indexing is implemented add logic to use different 
@@ -230,17 +210,8 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                           t.lineno)
         if t.type[-2:] == "[]":
             t.type = t.type[:-2]
-        #val = self._current_scope.lookup(t.identifier)
-        #if val.cat != NameCategory.PARAMETER:
-        #    self._is_idx_oob(t.idx, val)
 
-    # TODO - 
-        # Evaluate binary expression and determine if its result is dependent on a function or other variable-sized expression
-        # if it is disallow it as size to array initialization
-        # FIXME - when initialzing an array ensure that the given size is greater or equal to the number of elements given
-
-
-    # The auxiliaries
+# The auxiliaries
     #def _check_array_elements_match_type(self, t):
     #    # checks the type of the expressions given as elements to the array match the array
     #    mismatched = False
@@ -502,6 +473,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "parameter_list":
                   return t.type
             case "expression_null":
+                  print(t.type)
                   return t.type
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
@@ -523,9 +495,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 else: 
                     return "float"
     
-
-    # FIXME : IS THIS ENOUGH ------------------------------------------------------------------------------
-    # Type checking does not seem to allow for attributes access more than 1 extension deep for some reason
     # Checks if instance trying to be accessed exits and has field as member
     def _exist_membership(self, t, cat):
         ident = t.inst

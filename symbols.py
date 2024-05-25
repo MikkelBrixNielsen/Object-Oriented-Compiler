@@ -206,8 +206,6 @@ class ASTSymbolVisitor(VisitorsBase):
                           t.lineno)
  
         extensions = []
-        
-            
         # [attributes, methods, extended, methods inherited from extended class]
         info = [[],[], extensions, []]
         self._current_scope.insert(
