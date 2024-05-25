@@ -324,11 +324,7 @@ class ASTSymbolVisitor(VisitorsBase):
         if t.rhs.__class__.__name__ == "expression_new_instance":
             t.rhs.identifier = t.lhs
         if t.rhs.__class__.__name__ == "expression_new_array":
-           if lhs.cat == NameCategory.ARRAY:
-                error_message("Symbol Collection",
-                              f"Cannot assign new array to already initialized array - perhaps use indexing to change each element.",
-                              t.rhs.lineno)
-           lhs.size = t.rhs.size
+            lhs.size = t.rhs.size
   
     def postVisit_statement_return(self, t):
         cn = t.exp.__class__.__name__
