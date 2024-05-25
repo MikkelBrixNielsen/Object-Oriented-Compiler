@@ -5,7 +5,6 @@ from errors import error_message
 from lexer_parser import parser
 from symbols import ASTSymbolVisitor
 from type_checking import ASTTypeCheckingVisitor
-from ast_printer import ASTTreePrinterVisitor
 from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit

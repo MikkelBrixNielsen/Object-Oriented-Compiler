@@ -331,12 +331,13 @@ class ASTSymbolVisitor(VisitorsBase):
         _check_if_initialized(self, cn, t.exp)
 
     def preVisit_statement_print(self, t):
-        cn = t.exp.__class__.__name__
-        #_check_if_initialized(cn, t.exp)
-        if cn == "expression_new_instance":
-            error_message("Symbol Collection",
-                          f"Object initialization not allowed in print statement",
-                          t.lineno)
+        _not_anonymous(t, "print")
+            
+    def preMidVisit_statement_ifthenelse(self, t):
+        _not_anonymous(t, "if")
+
+    def midVisit_statement_while(self, t):
+        _not_anonymous(t, "while")
 
     def preVisit_expression_new_instance(self, t):
         t.symbol_table = self._current_scope # adds sym_table to instances
@@ -430,6 +431,12 @@ class ASTSymbolVisitor(VisitorsBase):
     # TODO - make identifier.<attr>/<func> syntax work for calling attributes / functions for a specific instace
 
 # Auxiliaries
+def _not_anonymous(t, stm):
+    if t.exp.__class__.__name__ in ["expression_new_instance", "expression_new_array"]:
+        error_message("Symbol Collection",
+                      f"Object initialization not allowed in {stm} statement",
+                      t.lineno)
+            
 def _record_variables(self, t, *args): # maybe don't need to be *args
     # AUX: Recording local variable names in the symbol table:
     if self._current_scope.lookup_this_scope(t.variable):
