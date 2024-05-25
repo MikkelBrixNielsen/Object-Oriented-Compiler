@@ -9,10 +9,10 @@ from label_generation import ASTLabelGeneratorVisitor
 from code_generation import ASTCodeGenerationVisitor
 from emit import Emit
 
-__version__ = "0.6.0"
+__version__ = "0.6.3"
 
 # MAIN
-def compiler(showSource, showAST, input_file, output_file):
+def compiler(showSource, input_file):
     """This function goes through the classic phases of a modern compiler,
     each phase organized in its own module. The phases are:
 
@@ -65,15 +65,8 @@ def compiler(showSource, showAST, input_file, output_file):
     # the_progrm is the resulting AST:
     the_program = interfacing_parser.the_program
 
-    if showSource or showAST:
-        #if showAST:
-            # Print AST tree in dot format:
-            #pp = ASTTreePrinterVisitor()
-
-        #the_program = the_program.body  # Remove artificial outer global.
-        #the_program.accept(pp)
-        #eturn pp.getPrettyProgram()
-        pass
+    if showSource:
+        return text
     else:
         # Collect names of functions, parameters, and local variables:
         symbols_collector = ASTSymbolVisitor()
@@ -96,7 +89,6 @@ def compiler(showSource, showAST, input_file, output_file):
         emitter = Emit(intermediate_code)
         emitter.emit()
         code = emitter.get_code()
-
         return code
 
 def main(argv):
@@ -112,11 +104,10 @@ def main(argv):
 
     -o target_file  Set target file; default is stdout.
     """
-    #-a  Print the AST in dot format instead of target code.
+
     input_file = ""
     output_file = ""
     show_source = False
-    show_ast = False
     try:
         opts, args = getopt.getopt(argv, "hsamvi:o:")
     except getopt.GetoptError:
@@ -133,13 +124,11 @@ def main(argv):
                 sys.exit(0)
             case "-s":
                 show_source = True
-            case "-a":
-                show_ast = True
             case "-i":
                 input_file = arg
             case "-o":
                 output_file = arg
-    result = compiler(show_source, show_ast, input_file, output_file)
+    result = compiler(show_source, input_file)
     if output_file:
         f = open(output_file, "w")
         f.write(result)
