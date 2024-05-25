@@ -17,24 +17,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
 
     def preVisit_class_declaration(self, t):
         self._current_scope = t.symbol_table
-        # checks if the extensions is actually a class 
-        super = t.extends
-        if super:
-            if super == t.name:
-                error_message("Type Checking",
-                              f"{t.name} cannot have itself as an extension.",
-                              t.lineno)
-            super_cd = self._current_scope.lookup(super)
-            if not super_cd:
-                error_message("Type Checking",
-                              f"Class {super} not found - maybe used before declaration.",
-                              t.lineno)
-                
-            if not NameCategory.CLASS == super_cd.cat:
-                cat = str(super_cd.cat).split(".")[-1].lower()
-                error_message("Type Checking",
-                            f"{t.name} can only extend other classes {super} is a {cat}.",
-                            t.lineno)
     
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent
@@ -49,10 +31,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_statement_assignment(self, t):
         lhs = None
         if t.lhs.__class__.__name__ == "expression_attribute":
-            #if t.lhs.type[-2:] == "[]":
-            #    error_message("Type Checking",
-            #                  f"Assignment to expression with array type", 
-            #                  t.lineno)
             lhs = self._exist_membership(t.lhs, "attribute")
         elif t.lhs.__class__.__name__ == "expression_array_indexing":
             ident = _get_identifier(t.lhs.identifier)
@@ -69,10 +47,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"Variable '{t}' not found.",
                           t.lineno)
-        #if lhs[2] == NameCategory.PARAMETER:
-        #    error_message("Type Checking",
-        #                  f"Assignment to parameter '{lhs[0]}' not allowed.",
-        #                  t.lineno)
         if lhs[2] == NameCategory.FUNCTION:
             error_message("Type Checking",
                           f"Assignment to function '{lhs[0]}' not allowed.",

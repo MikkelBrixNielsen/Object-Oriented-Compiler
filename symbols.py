@@ -206,8 +206,7 @@ class ASTSymbolVisitor(VisitorsBase):
                           t.lineno)
  
         extensions = []
-        if t.extends:
-            extensions.append(t.extends)
+        
             
         # [attributes, methods, extended, methods inherited from extended class]
         info = [[],[], extensions, []]
@@ -229,15 +228,24 @@ class ASTSymbolVisitor(VisitorsBase):
 
         # if class has an extension add the extensions methods and attributes to this class
         if t.extends:
-            super = self._current_scope.lookup_all(t.extends)
-            if not super:
-                error_message("Symbol Collection",
-                              f"Class '{t.extends}' not found - maybe used before declaration.",
-                              t.lineno)
-            if not super.cat == NameCategory.CLASS:
-                error_message("Symbol Collection",
-                              f"Extension '{t.extends}' is not a class.",
-                              t.lineno)
+            extensions.append(t.extends)
+            super = t.extends
+            if super:
+                if super == t.name:
+                    error_message("Symbol Collection",
+                                  f"{t.name} cannot have itself as an extension.",
+                                  t.lineno)
+                super_cd = self._current_scope.lookup(super)
+                if not super_cd:
+                    error_message("Symbol Collection",
+                                  f"Class {super} not found - maybe used before declaration.",
+                                  t.lineno)
+
+                if not NameCategory.CLASS == super_cd.cat:
+                    cat = str(super_cd.cat).split(".")[-1].lower()
+                    error_message("Symbol Collection",
+                                f"{t.name} can only extend other classes {super} is a {cat}.",
+                                t.lineno)
             _extend(self, t, super)
 
     def postVisit_class_declaration(self, t):
