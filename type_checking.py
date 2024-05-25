@@ -481,7 +481,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             current = current.next
         return num_params
     
-    def _param_type_match(self, a, b, name):
+    def _param_type_match(self, a, b):
         matches = 0
         i = 0
         while i < len(a) and b:
@@ -490,7 +490,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
                 if "null" != exp_type:
                      break
                 b.exp.type = a[i][1] # if exp_type == null -> null expression set type of null expression to type of parameter
-            b.param = a[i][0] # assigns given param to actual param
+            b.param = a[i][0] # assigns given param to actual param (class attribute)
             matches += 1
             b = b.next
             i += 1
@@ -618,7 +618,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             error_message("Type Checking",
                           f"call to constructor for {name} made with too few arguments.",
                           lineno)
-        elif not self._param_type_match(value.info[0], params, name):
+        elif not self._param_type_match(value.info[0], params):
             error_message("Type Checking",
                           f"Type of parameters given does not match parameters needed.",
                           lineno) 

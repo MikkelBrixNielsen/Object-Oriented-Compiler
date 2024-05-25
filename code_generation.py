@@ -346,9 +346,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if t.struct.__class__.__name__ == "expression_attribute":
             inst, field = self._generate_attribute_labeled_identifier(t.struct)
         else:
-            val = self._current_scope.lookup_this_scope(t.struct)
-            inst = t.struct + val.label if val else ""
-            cd = self._current_scope.lookup_all(self._current_scope.lookup(t.struct).type[:-1]).info
+            val = self._current_scope.lookup(t.struct)
+            inst = t.struct + val.label
+            cd = self._current_scope.lookup_all(val.type[:-1]).info
             member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
             field = member[0] + member[2]
         self._app(Ins(Op.ATTRASSIGN, inst, t.next, field))
