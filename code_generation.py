@@ -647,7 +647,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         references = []
         if hasattr(info, "_assigned_value"):
             references = references + info._assigned_value._references
-        print(references)
         for ref in references:
             if ref not in self._current_scope._tab:
                 return False
