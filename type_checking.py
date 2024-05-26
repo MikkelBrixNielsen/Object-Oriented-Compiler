@@ -473,7 +473,6 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "parameter_list":
                   return t.type
             case "expression_null":
-                  print(t.type)
                   return t.type
             case _:
                   error_message("Type Checking", f"_get_type does not implement {t.__class__.__name__}", t.lineno)
