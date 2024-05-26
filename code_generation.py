@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from visitors_base import VisitorsBase
 from symbols import NameCategory, PRIM_TYPES, _get_identifier
-#from label_generation import LabelTable
+from label_generation import LabelGenerator
 import AST
 
 class Op(Enum):
@@ -16,28 +16,22 @@ class Op(Enum):
     LTE = auto()
     GT = auto()
     GTE = auto()
-
     TYPE = auto()
     RET = auto()
-
     INDENT = auto()
     IDTL_M = auto()
     IDTL_P = auto()
-    
     CALLSTART = auto()
     CALLEND = auto()
-    
     CLASS = auto()
     CLASSMID = auto()
     THIS = auto()
     ATTRASSIGN = auto()
-
     ATTRLIST = auto()
     VARLIST = auto()
     PARAMS = auto()
     ASSIGN = auto()
     SIGNATURE = auto()
-
     START = auto()
     PREMID = auto()
     MID = auto()
@@ -46,7 +40,6 @@ class Op(Enum):
     PRINT = auto()
     COMMA = auto()
     RAW = auto()
-
     NULLINITIALIZATION = auto()
     ALLOC = auto()
     FREE = auto()
@@ -55,8 +48,6 @@ class Op(Enum):
     MEMCHECK = auto()
     DEFAULTVAL = auto()
     TEMP = auto()
-
-
 
 class Ins:
     def __init__(self, *args, c=""):
@@ -110,7 +101,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         if isinstance(t.lhs , str) and not cnr == "expression_new_instance": # If statement assignemnt gets identifier, which is just a string it is responsible for printing it
             self._app(Ins(Op.INDENT))
-            self._app(Ins(Op.ASSIGN, t.lhs + self._current_scope.lookup(t.lhs).label))
+            val = self._current_scope.lookup(t.lhs)
+            label = val.label if val.cat != NameCategory.PARAMETER else ""
+            self._app(Ins(Op.ASSIGN, t.lhs + label))
         if cnl  == "expression_array_indexing" and (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
             self._app(Ins(Op.INDENT))
         elif cnl == "expression_attribute" and cnr == "expression_identifier":
@@ -227,7 +220,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.ATTRLIST, t.variable + t.label, t.next, t.type))
 
     def postVisit_expression_identifier(self, t):
-        self._app(Ins(Op.RAW, t.identifier + t.label))
+        val = self._current_scope.lookup(t.identifier)
+        label = val.label if val.cat != NameCategory.PARAMETER else ""
+        self._app(Ins(Op.RAW, t.identifier + label))
 
     def preVisit_function(self, t):
         # functions defined instide the global scope 
@@ -253,6 +248,15 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.END))
 
     def preVisit_parameter_list(self, t):
+        #label = ""
+        #if t.parameter != "this":
+        #    temp = self._current_scope # saves previous scope
+        #    if hasattr(t, "class_scope"):
+        #        self._current_scope = t.class_scope
+        #        #label = LabelGenerator._generate()
+        #    #else:
+        #    label = self._current_scope.lookup(t.parameter).label
+        #    self._current_scope = temp # restores previous scope 
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
 
     def preVisit_expression_call(self, t):
@@ -321,8 +325,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             identifier = self._generate_attribute_labeled_identifier(t.identifier)
             identifier = f"{identifier[0]}->{identifier[1]}"
         else:
-            identifier = t.identifier + self._current_scope.lookup(t.identifier).label
-            pass
+            val = self._current_scope.lookup(t.identifier)
+            label = val.label if val.cat != NameCategory.PARAMETER else ""
+            identifier = t.identifier + label
         self._app(Ins(Op.ASSIGN, identifier))
         self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
         self._app(Ins(Op.RAW, ";"))
@@ -336,7 +341,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             inst, field = self._generate_attribute_labeled_identifier(t.struct)
         else:
             val = self._current_scope.lookup(t.struct)
-            inst = t.struct + val.label
+            inst = t.struct + val.label if val.cat != NameCategory.PARAMETER else t.struct
             cd = self._current_scope.lookup_all(val.type[:-1]).info
             member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
             field = member[0] + member[2]
@@ -384,7 +389,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.RAW, lablled_name))
         self._app(Ins(Op.RAW, "("))
 
-        # constructs list of parameters
+        # adds reference to own instance to the list of arguments
         args = lablled_inst
         if t.exp_list:
             args += ", "
@@ -419,7 +424,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             inst, field = self._generate_attribute_labeled_identifier(t.identifier)
             prev = f"{inst}->{field}"
         else:
-            prev = t.identifier + self._current_scope.lookup(t.identifier).label
+            val = self._current_scope.lookup(t.identifier)
+            label = val.label if val.cat != NameCategory.PARAMETER else ""
+            prev = t.identifier + label
 
         while len(current.info[2]) > 0: # There are more extensions to generate code for
             name = current.info[2][0].lower()
@@ -481,23 +488,39 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     method_name = member[0] + member[2].label
                     self._app(Ins(Op.TYPE, member[1]))
                     self._app(Ins(Op.START, " " + t.name + "_" + method_name, member[1]))
-                    self._app(Ins(Op.PARAMS, t.name, "*this", None))
+                    self._app(Ins(Op.PARAMS, t.name, "*this", member[2].par_list.next))
+                    param_ins = self._process_ext_meth_params(member[2].par_list)
+                    [self._app(ins) for ins in param_ins] # appends extending methods params
                     self._app(Ins(Op.PREMID))
                     self._app(Ins(Op.IDTL_P))
                     self._app(Ins(Op.RET))
                     name = cd.info[2][0].lower()
-                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + method_name + "(this->" + name + t.label + ")"))
+                    self._app(Ins(Op.RAW, cd.info[2][0] + "_" + method_name + "(this->" + name + t.label))
+                    if len(param_ins) > 0:
+                        for ins in param_ins:
+                            self._app(Ins(Op.RAW, ","))
+                            self._app(Ins(ins.opcode, "", *ins.args[-2:]))
+                    self._app(Ins(Op.RAW, ")"))
                     self._app(Ins(Op.RAW, ";"))
                     self._app(Ins(Op.IDTL_M))
                     self._app(Ins(Op.END))
-                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + method_name, AST.parameter_list(t.name, "*this", None, t.lineno)))
-
+                    self._app(Ins(Op.SIGNATURE, member[1], t.name + "_" + method_name, AST.parameter_list(t.name, "*this", member[2].par_list.next, t.lineno)))
+    
     def _find_member_in_tuple_list(self, m, tl):
         for member in tl:
             if member[0] == m[0] and member[1] == m[1]:
                 return member
         return None
     
+    def _process_ext_meth_params(self, params):
+        ins = []
+        # omit the 'this' reference from the preivous class
+        params = params.next
+        while params:
+            ins.append(Ins(Op.PARAMS, params.type, params.parameter, params.next))
+            params = params.next
+        return ins
+
     def _is_member_in_tuple_list(self, m, tl):
         return not self._find_member_in_tuple_list(m, tl) == None
 
@@ -631,7 +654,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 assigned_value = lhs_val._assigned_value
                 assigned_value._references.remove(lhs_id)
                 if assigned_value.type not in PRIM_TYPES and len(assigned_value._references) == 0:
-                    self._app(Ins(Op.FREE, lhs_id + self._current_scope.lookup(lhs_id).label))
+                    val = self._current_scope.lookup(lhs_id)
+                    label = val.label if val.cat != NameCategory.PARAMETER else ""
+                    self._app(Ins(Op.FREE, lhs_id + label))
 
             rv, _ = get_rhs_value(rhs_id, rhs_class)
 

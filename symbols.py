@@ -244,7 +244,7 @@ class ASTSymbolVisitor(VisitorsBase):
                     error_message("Symbol Collection",
                                 f"{t.name} can only extend other classes {super} is a {cat}.",
                                 t.lineno)
-            _extend(self, t, super)
+            _extend(self, t, super_cd)
 
     def postVisit_class_declaration(self, t):
         self._current_scope = self._current_scope.parent

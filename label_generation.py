@@ -6,23 +6,6 @@ class LabelGenerator:
         self._tab = {}
         self.parent = parent
 
-    # Inserts lables into table for the give name
-    # and returns name with lable
-    #def insert(self, name):
-    #    lable = self._numgen()
-    #    self._tab[name] = lable
-    #    return name + lable
-
-    # Finds the lable corresponding to name if any exist
-    # it returns name with lable otherwise returns name
-    #def lookup(self, name):
-    #    if name in self._tab:
-    #        return name + self._tab[name]
-    #    elif self.parent:
-    #        return self.parent.lookup(name)
-    #    else:
-    #        return name
-        
     # Generates label 
     def _generate():
         temp = int(LabelGenerator._counter) + 1
@@ -38,26 +21,6 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         self. label_generator = LabelGenerator
         self._current_scope = None
 
-    # creates and enters a new scope
-    #def _enter_new_scope(self, t):
-    #    # saves LabelTable in AST
-    #    t._labels = self._labels
-    #    t._temp_labels = self._temp_labels
-    #    t._comp_labels = self._comp_labels
-
-    #    # goes into the new scope
-    #    self._current_scope = t.symbol_table
-    #    self._labels = LabelTable(self._labels)
-    #    self._temp_labels = LabelTable(self._temp_labels)
-    #    self._comp_labels = LabelTable(self._comp_labels)
-    
-    # exits the current scope and goes to parent scope
-    #def _exit_current_scope(self, t):
-    #    self._current_scope = self._current_scope.parent
-    #    self._labels = self._labels.parent
-    #    self._temp_labels = self._temp_labels.parent
-    #    self._comp_labels = self._comp_labels.parent
-    
     def preVisit_variables_list(self, t):
         t.label = self.label_generator._generate()
         self._current_scope.lookup_this_scope(t.variable).label = t.label
@@ -153,12 +116,6 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
             if len(current.info[2]) < 2:
                 current.info[2].append(LabelGenerator._generate())
 
-            # not needed since labels for attributes are now always generated instead if only when it is a pointer
-            #super = self._current_scope.lookup(current.info[2][0])
-            #for i in range(len(super.info[0])):
-            #    if super.info[0][i][-1][-1:] == "*":
-            #        super.info[0][i] = (super.info[0][i][0], super.info[0][i][1], LabelGenerator._generate())
-            #        print(super.info[0])
             current = self._current_scope.lookup(current.info[2][0])
 
     def _extend_class(self, t):
@@ -166,10 +123,22 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         # put the label for the extension on the tree but if there 
         # can be multiple extensions (multi-inheritannce) the lables
         # should be saved along with the extension name
-        cd = self._current_scope.lookup(t.name).info[2]
-        if not len(cd) < 1:
+        cd = self._current_scope.lookup(t.name)
+        if not len(cd.info[2]) < 1:
             self._generate_and_set_label_if_none(t, t)
-            cd.append(t.label)
+            cd.info[2].append(t.label)
+
+        #if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
+        #    for member in cd.info[3]: # where the additions are located
+        #        if len(member) >= 3: # method
+        #            self._process_ext_meth_params(member[2].par_list)
+    
+    #def _process_ext_meth_params(self, params):
+    #    # omit the this reference from the preivous class
+    #    params = params.next
+    #    while params:
+    #        self._generate_and_set_label_if_none(params, params)
+    #        params = params.next
 
     def _find_member_in_tuple_list(self, m, tl, cat):
         for member in tl:
