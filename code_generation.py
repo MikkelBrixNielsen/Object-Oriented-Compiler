@@ -1,7 +1,6 @@
 from enum import Enum, auto
 from visitors_base import VisitorsBase
 from symbols import NameCategory, PRIM_TYPES, _get_identifier
-from label_generation import LabelGenerator
 import AST
 
 class Op(Enum):
@@ -248,15 +247,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             self._app(Ins(Op.END))
 
     def preVisit_parameter_list(self, t):
-        #label = ""
-        #if t.parameter != "this":
-        #    temp = self._current_scope # saves previous scope
-        #    if hasattr(t, "class_scope"):
-        #        self._current_scope = t.class_scope
-        #        #label = LabelGenerator._generate()
-        #    #else:
-        #    label = self._current_scope.lookup(t.parameter).label
-        #    self._current_scope = temp # restores previous scope 
         self._app(Ins(Op.PARAMS, t.type, t.parameter, t.next))
 
     def preVisit_expression_call(self, t):
@@ -543,61 +533,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             idt[1] = member[0] + member[2]
         return idt
     
-    #def _cleanup(self, t):
-    #    if not t.name == "global" or t.scope_level > 0: # clean up for all other user defined functions
-    #        # finds and frees variables in the scope for the current function
-    #        self._find_and_free_in(t.body.variables_decl)
-    #    else: # clean up for the global scope encapsulating everything
-    #        self._find_and_free_in(t.body.variables_decl)
-
-    #def _find_and_free_in(self, list):
-        # Delete the comment bellow if the code to find all variables is deleted 
-        # Collects all variables defined in the function
-    #    collected_vars = {}
-    #    decl = list
-    #    while decl:
-    #        var = decl.decl
-    #        while var:
-    #            if not (var.type in PRIM_TYPES):
-    #                    collected_vars[var.variable] = False
-    #            var = var.next                         
-    #        decl = decl.next 
-    #    print(collected_vars)
-    
-    # TODO
-    # Do free for global scope encapsulating main and stuff
-
-    #def _assignment(self, t):
-    #    cn = t.lhs.__class__.__name__
-    #    name = t.lhs
-    #    lhs = t.lhs
-    #    if cn == "expression_attribute":
-    #        name = t.lhs.field if t.lhs.inst == "this" else t.lhs.inst
-    #        lhs = self._current_scope.lookup_class(name)
-    #    elif cn == "expression_array_indexing":
-    #       # FIXME - if array indexing is possible on array attributes then something link "expression_attribute" should happen
-    #       name = _get_identifier(t.lhs.identifier)
-    #       name = name if not isinstance(name, tuple) else name[0]
-    #       lhs = self._current_scope.lookup(name)
-    #    else:
-    #        lhs = self._current_scope.lookup(name)
-    #
-    #    # finds identifiers in rhs expression and saves them in symbol table for lhs identifier
-    #    lhs._assigned_value = []
-    #    lhs._assigned_value.append(_get_identifier(t.rhs))
-    #    if hasattr(t.rhs, "_assigned_value"):
-    #        lhs._assigned_value = lhs._assigned_value + t.rhs._assigned_value
-    #    
-    #    # for all variables in rhs if they have variables assigned to them and are not primitive 
-    #    # types save those variables as well
-    #    for var in lhs._assigned_value:
-    #        val = self._current_scope.lookup(var)
-    #        if not val:
-    #            val = self._current_scope.lookup_class(var)
-    #        if val and val.type not in PRIM_TYPES:
-    #            lhs._assigned_value = lhs._assigned_value + val._assigned_value
-
-
     def _assign_cleanup(self, t):
         def get_rhs_value(rhs, cnr):
             """ Retrieve the appropriate value for the rhs. """
@@ -668,17 +603,23 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
 
     def _rhs_exprresion_attribute_assign_aux(self, rv):
-        print("GARBAGE COLLECTION FOR ATTRIBUTES NOT IMPLEMENTED")
-        pass
+        self._app(Ins(Op.INDENT))
+        self._app(Ins(Op.RAW, "//free() // GARBAGE COLLECTION FOR ATTRIBUTES NOT IMPLEMENTED"))
 
     def _cleanup(self, t):
-        self._free_list(self._collect_variables(t))
+        self._free_list(self._collect_variables_to_free(t))
+        self._remove_local_references(t)
 
     def _free_list(self, collected_vars):
         for key, info in collected_vars.items():
             self._free_object(key, info.type, info.label)
 
-    def _collect_variables(self, t):
+    def _remove_local_references(self, t):
+        for key, info in self._current_scope._tab.items():
+            if hasattr(info, "_assigned_value"):
+                info._assigned_value._references.remove(key)
+
+    def _collect_variables_to_free(self, t):
         # should be all variables with a reference count > 0
         variables_to_not_free = []
         
@@ -694,21 +635,19 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 # puts all references to the object elem has been assigned into the 
                 # variables_to_not_free list such that double frees don't occur
                 if hasattr(info, "_assigned_value"):
-                    variables_to_not_free.append(x for x in info._assigned_value._references)
+                    for x in info._assigned_value._references:
+                        variables_to_not_free.append(x)
                 if hasattr(info, "_attr_assigned_value"):
                     for key, val in info._attr_assigned_value.items():
-                        variables_to_not_free.append(x for x in val._references)
+                        for x in val._references:
+                            variables_to_not_free.append(x)
         return variables_to_free
     
     def _all_refs_in_scope(self, elem, info):
         references = []
         if hasattr(info, "_assigned_value"):
             references = references + info._assigned_value._references
-            
-        #if hasattr(info, "_attr_assigned_value"):
-        #    for key, val in info._attr_assigned_value.items():
-        #        references.append(x for x in val._references)
-        
+        print(references)
         for ref in references:
             if ref not in self._current_scope._tab:
                 return False
@@ -736,84 +675,4 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def _free_array(self, key, type, label, prev=""):
         self._app(Ins(Op.INDENT))
-        self._app(Ins(Op.RAW, f"// Free({key + label})\n"))
-        pass
-
-    #def _collect_variables_in_return(self, t):
-    #    vars_in_return = []
-    #    current = t
-    #    while current:
-    #        if current.__class__.__name__ == "expression_binop":
-    #            vars_in_return = vars_in_return + self._collect_variables_in_return(t.exp.lhs)
-    #            vars_in_return = vars_in_return + self._collect_variables_in_return(t.exp.rhs)
-    #        else:
-    #            identifier = self._flatten_tuple(_get_identifier(current.exp))
-    #            for idt in identifier:
-    #                elem = self._current_scope.lookup(idt)
-    #                if elem and elem.type not in PRIM_TYPES:
-    #                    vars_in_return.append(idt)
-    #        if hasattr(current, "next"):
-    #            current = current.next
-    #        else: 
-    #            current = None
-    #    return vars_in_return
-    
-    #def _flatten_tuple(self, t):
-    #    if not isinstance(t, tuple):
-    #        return []
-    #    flattened_list = []
-    #    for item in t:
-    #        if isinstance(item, tuple):
-    #            flattened_list.extend(self._flatten_tuple(item))
-    #        else:
-    #            flattened_list.append(item)
-    #    return flattened_list
-        
-        # looks through statements to see what collected variables are assigned 
-        #stm = list
-        #print(collected_vars, t.name, "START")
-        #while stm:
-        #    if stm.stm.__class__.__name__ == "statement_assignment":
-        #        val = self._current_scope.lookup_this_scope(stm.stm.lhs) # only looks for variables in the current function scope  
-        #        if val and val.type not in PRIM_TYPES and val.cat != NameCategory.PARAMETER: # primitive types and parameters should not be freed
-        #            collected_vars[_get_identifier(stm.stm)[0]] = True # _get_identifier(stm.stm)[0] is lhs for statement_assignment 
-        #    stm = stm.next
-        #print(collected_vars, t.name, "END")
-        # looks through all statemnts and finds all returns statements
-        # and places free statements before it
-        #stm = list
-        #while stm:
-            # only look at whether the current statment is a return statement
-            # it should also look if e.g. a if_then_else statement has a return
-            # or a while_statement etc.
-         #   if stm.stm.__class__.__name__ == "statement_return":
-         #       ins = self._remove_return_instructions()
-         #       self._free_list(collected_vars)
-         #       self._add_return_instructions(ins)
-         #   stm = stm.next
-        
-    # removes instructions associated with return statement
-    #def _remove_return_instructions(self):
-    #    ins = []
-    #    current = self._code.pop()
-    #    while current:
-    #        ins.append(current)
-    #        if current.opcode == Op.RET:
-    #            break
-    #        current = self._code.pop()
-    #    return ins[::-1] # reverse the instruction to get them in the order which they should be put back
-
-    # Puts the instructions for return statement back into the code after the free statements
-    # ins must be the result from callign _remove_return_instructions
-    #def _add_return_instructions(self, ins):
-    #    [self._app(x) for x in ins]
-
-    # frees should happen in returns
-    # when assigning something to something new the old thing should be freed 
-       # Flag saying something has been assigned something???
-    # variables should be collected in previsit function
-    # if the variable you are trying to free is a class and 
-    # it has instances of other classes it also has to be freed
-    # when initializing an instance or array set them to Null / 0 at the beginnig
-    # relevant attributes should be freed, 
-    # except for those included in a return statement of the scope in which the class containing them is initialized
+        self._app(Ins(Op.RAW, f"// free({key + label}) // free for arrays not implemented\n"))
