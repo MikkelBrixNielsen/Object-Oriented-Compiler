@@ -270,12 +270,10 @@ class statement_assignment:
     def accept(self, visitor):
         visitor.preVisit(self)
         self.rhs.accept(visitor)
-        #if not isinstance(self.lhs, str):  
-        #    self.lhs.accept(visitor)
         visitor.midVisit(self)
-        if not isinstance(self.lhs, str) and not self.rhs.__class__.__name__ == "expression_new_instance":
+        if (not isinstance(self.lhs, str) and 
+            not self.rhs.__class__.__name__ == "expression_new_instance"):
             self.lhs.accept(visitor)
-        #self.rhs.accept(visitor)
         visitor.postVisit(self)
 
 @dataclass
@@ -516,9 +514,13 @@ class expression_new_instance:
     params: Any
     lineno: int
     identifier: Any = field(default=None)
+    temp: Any = field(default=None)
 
     def accept(self, visitor):
         visitor.preVisit(self)
+        if self.temp:
+            self.temp.accept(visitor)
+        visitor.midVisit(self)
         if self.params:
             self.params.accept(visitor)
         visitor.postVisit(self)

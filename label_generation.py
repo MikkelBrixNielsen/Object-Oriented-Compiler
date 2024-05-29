@@ -1,4 +1,5 @@
 from visitors_base import VisitorsBase
+from symbols import NameCategory
 
 class LabelGenerator:
     _counter = "0000"
@@ -18,7 +19,7 @@ class LabelGenerator:
 
 class ASTLabelGeneratorVisitor(VisitorsBase):
     def __init__(self):
-        self. label_generator = LabelGenerator
+        self.label_generator = LabelGenerator
         self._current_scope = None
 
     def preVisit_variables_list(self, t):
@@ -58,7 +59,7 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
             val = self._current_scope.lookup(t.identifier)
             if not hasattr(val, "label"):
                 t.label = self.label_generator._generate()
-                self._current_scope.lookup_this_scope(t.identifier).label = t.label
+                self._current_scope.lookup(t.identifier).label = t.label
             else:
                 t.label = val.label        
 
@@ -86,7 +87,8 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
     def preVisit_expression_array_indexing(self, t):
         if isinstance(t.identifier, str):
             if t.identifier != "this":
-                t.label = self._current_scope.lookup(t.identifier).label
+                val = self._current_scope.lookup(t.identifier)
+                t.label = val.label if val.cat != NameCategory.PARAMETER else ""
             else:
                 t.label = ""            
 
@@ -95,7 +97,7 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         self._current_scope = t.symbol_table
 
     def preVisit_instance_expression_list(self, t):
-         # generate temp label
+        # generate temp label
         if not hasattr(t, "temp_label"):
             t.temp_label = LabelGenerator._generate()
 
@@ -127,18 +129,6 @@ class ASTLabelGeneratorVisitor(VisitorsBase):
         if not len(cd.info[2]) < 1:
             self._generate_and_set_label_if_none(t, t)
             cd.info[2].append(t.label)
-
-        #if len(cd.info[3]) > 0: # len > 0 => there are additons to generate code for
-        #    for member in cd.info[3]: # where the additions are located
-        #        if len(member) >= 3: # method
-        #            self._process_ext_meth_params(member[2].par_list)
-    
-    #def _process_ext_meth_params(self, params):
-    #    # omit the this reference from the preivous class
-    #    params = params.next
-    #    while params:
-    #        self._generate_and_set_label_if_none(params, params)
-    #        params = params.next
 
     def _find_member_in_tuple_list(self, m, tl, cat):
         for member in tl:

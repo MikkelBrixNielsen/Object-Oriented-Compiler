@@ -454,7 +454,7 @@ def _extend(self, t, ext):
 def _check_if_initialized(self, cn, t):
     if (not cn == "expression_integer" and not cn == "expression_float" and 
         not cn == "expression_boolean" and not cn == "expression_char"):
-        if cn in ["function", "method"]:
+        if cn in ["function", "method", "expression_method", "expression_call", "statemnet_call", "statement_method"]:
             return 
         ident = _get_identifier(t)
         ident = ident if not isinstance(ident, tuple) else ident[0]

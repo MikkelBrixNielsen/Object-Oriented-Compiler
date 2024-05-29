@@ -38,8 +38,9 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             ident = _get_identifier(t.lhs.identifier)
             ident = ident if not isinstance(ident, tuple) else ident[0]
             lhs = self._current_scope.lookup(ident)
+            
             if lhs:
-                lhs = [ident, t.lhs.type, lhs.cat]
+                lhs = [ident, t.lhs.type if t.lhs.type else lhs.type[:-2], lhs.cat]
         else: 
             lhs = self._current_scope.lookup(t.lhs)
             if lhs:
@@ -71,7 +72,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         self._is_boolean_convertable(t)
 
     def postVisit_statement_return(self, t):
-        if t.__class__.__name__ in ["function", "method"]:
+        if t.__class__.__name__ in ["function", "method", "expression_method", "expression_call", "statemnet_call", "statement_method"]:
             val = self._current_scope.lookup(t.name)
             if not val:
                 error_message("Type checking.",
@@ -145,14 +146,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def postVisit_expression_binop(self, t):
         t_lhs = self._get_type(t.lhs)
         t_rhs = self._get_type(t.rhs)
-        if (t_lhs != "int" and t_lhs != "float"):
-            error_message("Type Checking",
-                          f"Expression of type '{t_lhs}' not allowed in binop.",
-                          t.lineno)
-        if (t_rhs != "int" and t_rhs != "float"):
-            error_message("Type Checking",
-                          f"Expression of type '{t_rhs}' not allowed in binop.",
-                          t.lineno)
+        #if (t_lhs != "int" and t_lhs != "float"):
+        #    error_message("Type Checking",
+        #                  f"Expression of type '{t_lhs}' not allowed in binop.",
+        #                  t.lineno)
+        #if (t_rhs != "int" and t_rhs != "float"):
+        #    error_message("Type Checking",
+        #                  f"Expression of type '{t_rhs}' not allowed in binop.",
+        #                  t.lineno)
         t.type = self._get_effective_type(t_lhs, t_rhs, t)
                         
     def postVisit_expression_new_instance(self, t):
@@ -495,7 +496,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             case "==" | "!=" | "<" | ">" | "<=" | ">=":
                 return "int"
             case "/":
-                return "float"
+                return "int" #"float"
             case "*" | "+" | "-":
                 if type1 == "int" and type2 == "int":
                     return "int"

@@ -85,7 +85,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     # FIXME - GARBAGE COLLECTION free when assigning values to lhs if rhs has no references
     def preVisit_statement_assignment(self, t):
-        self._assign_cleanup(t)
+        if t.rhs.__class__.__name__ == "expression_new_instance":
+            t.rhs.temp = t.lhs
+        ident = _get_identifier(t.lhs)
+        ident = ident[0] if isinstance(ident, tuple) else ident
+        if not self._current_scope.lookup(ident).type[-2:] == "[]":
+            self._assign_cleanup(t)
         self._app(Ins(Op.TYPE, t.rhs.type))
         self._app(Ins(Op.TEMP, "TEMP" + t.temp_label, None, t.rhs.type))
         self._app(Ins(Op.ASSIGN, ""))
@@ -103,18 +108,17 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             val = self._current_scope.lookup(t.lhs)
             label = val.label if val.cat != NameCategory.PARAMETER else ""
             self._app(Ins(Op.ASSIGN, t.lhs + label))
-        if cnl  == "expression_array_indexing" or (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
+        if cnl  == "expression_array_indexing" and (not cnr == "expression_new_instance"):
             self._app(Ins(Op.INDENT))
         elif cnl == "expression_attribute" and cnr == "expression_identifier":
             self._app(Ins(Op.INDENT))
-
 
     def postVisit_statement_assignment(self, t):
         cnr = t.rhs.__class__.__name__
         cnl = t.lhs.__class__.__name__
         # if lhs isn't a string then expression will print itself
-        if not isinstance(t.lhs , str) or (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
-            self._app(Ins(Op.ASSIGN, ''))
+        if not isinstance(t.lhs , str) and (not cnr == "expression_new_instance"):
+           self._app(Ins(Op.ASSIGN, ''))
         if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, "TEMP" + t.temp_label))
             self._app(Ins(Op.RAW, ";"))
@@ -220,7 +224,9 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def postVisit_expression_identifier(self, t):
         val = self._current_scope.lookup(t.identifier)
-        label = val.label if val.cat != NameCategory.PARAMETER else ""
+        label = ""
+        if not val.cat == NameCategory.PARAMETER:
+            label = val.label
         self._app(Ins(Op.RAW, t.identifier + label))
 
     def preVisit_function(self, t):
@@ -310,10 +316,16 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         self._app(Ins(Op.INDENT))
 
+
+
+    def midVisit_expression_new_instance(self, t):
         identifier = ""
-        if t.identifier.__class__.__name__ == "expression_attribute":
+        cn = t.identifier.__class__.__name__
+        if cn == "expression_attribute":
             identifier = self._generate_attribute_labeled_identifier(t.identifier)
             identifier = f"{identifier[0]}->{identifier[1]}"
+        elif cn == "expression_array_indexing":
+            t.params.p_temp_label = t.temp_label
         else:
             val = self._current_scope.lookup(t.identifier)
             label = val.label if val.cat != NameCategory.PARAMETER else ""
@@ -327,12 +339,25 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     def preVisit_instance_expression_list(self, t):
         inst = ""
         field = ""
-        if t.struct.__class__.__name__ == "expression_attribute":
+        cn = t.struct.__class__.__name__
+        if cn == "expression_attribute":
             inst, field = self._generate_attribute_labeled_identifier(t.struct)
         else:
-            val = self._current_scope.lookup(t.struct)
-            inst = t.struct + val.label if val.cat != NameCategory.PARAMETER else t.struct
-            cd = self._current_scope.lookup_all(val.type[:-1]).info
+            inst = ""
+            val = None
+            cn = t.struct.__class__.__name__
+            if cn == "expression_array_indexing":
+                ident = _get_identifier(t.struct)
+                ident = ident if not isinstance(ident, tuple) else ident[0]
+                val = self._current_scope.lookup(ident)
+                inst = "TEMP" + t.p_temp_label
+                if t.next:
+                    t.next.p_temp_label = t.p_temp_label
+            else:
+                val = self._current_scope.lookup(t.struct)
+                inst = t.struct + val.label if val.cat != NameCategory.PARAMETER else t.struct
+            ct = val.type[:-1] if cn != "expression_array_indexing" else val.type[:-3]
+            cd = self._current_scope.lookup_all(ct).info
             member = self._find_member_in_tuple_list((t.param, t.exp.type), cd[0])
             field = member[0] + member[2]
         self._app(Ins(Op.ATTRASSIGN, inst, t.next, field))
@@ -396,7 +421,11 @@ class ASTCodeGenerationVisitor(VisitorsBase):
 
     def preVisit_expression_array_indexing(self, t):
         if isinstance(t.identifier, str):
-            self._app(Ins(Op.RAW, f"{_get_identifier(t.identifier) + t.label}["))
+            label = ""
+            val = self._current_scope.lookup(t.identifier)
+            if hasattr(val, "label"):
+                label = val.label
+            self._app(Ins(Op.RAW, f"{t.identifier + label}["))
         else:
             self._app(Ins(Op.RAW, "["))
 
@@ -410,13 +439,18 @@ class ASTCodeGenerationVisitor(VisitorsBase):
     # FIXME - Ensure that there is a check in regard to if the type of the expression trying to be assigned to the extensions attributes match
     def _extension_instance(self, t):
         current = self._current_scope.lookup_all(t.struct)
-        if t.identifier.__class__.__name__ == "expression_attribute":
+        cn = t.identifier.__class__.__name__
+        if cn == "expression_attribute":
             inst, field = self._generate_attribute_labeled_identifier(t.identifier)
             prev = f"{inst}->{field}"
+        elif cn == "expression_array_indexing":
+            prev = "temp" + t.temp_label
         else:
-            val = self._current_scope.lookup(t.identifier)
+            ident = _get_identifier(t.identifier)
+            ident = ident[0] if isinstance(ident, tuple) else ident
+            val = self._current_scope.lookup(ident)
             label = val.label if val.cat != NameCategory.PARAMETER else ""
-            prev = t.identifier + label
+            prev = ident + label
 
         while len(current.info[2]) > 0: # There are more extensions to generate code for
             name = current.info[2][0].lower()
