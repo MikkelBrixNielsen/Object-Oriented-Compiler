@@ -171,9 +171,6 @@ def p_assignment_list(t):
     else:
         t[0] = AST.assignment_list(t[1], t[3], t.lexer.lineno)
 
-# DUE TO STM_LIST BEING OPTIONAL FUNCTIONS NO LONGER HAVE REQUIRED RETURN STATEMENT
-# MAKE IT SO RETURN IS REQUIRED BY FUNCTIONS WHICH AREN'T GLOLAL FUNCTION
-# FIXME - includes instance syntax and this. syntax the latter should only be allowed in classes though
 def p_body(t):
     'body : optional_variables_declaration_list optional_functions_declaration_list optional_statement_list'
     t[0] = AST.body(t[1], t[2], t[3], t.lexer.lineno)
@@ -190,16 +187,8 @@ def p_optional_variables_declaration_list(t):
 def p_variables_declaration_list(t):
     '''variables_declaration_list : FT variables_list SEMICOL
                                   | FT variables_list SEMICOL variables_declaration_list'''
-                                  #| array_list SEMICOL
-                                  #| array_list SEMICOL variables_declaration_list'''
-    #if len(t) == 3:
-    #   t[0] = AST.variables_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
-    #elif if len(t) == 4:
     if len(t) == 4:
-        #if not t[1].__class__.__name__ == "array_list":
         t[0] = AST.variables_declaration_list(t[1], t[2], None, t.lexer.lineno)
-        #else:
-            #t[0] = AST.variables_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
     else:
         t[0] = AST.variables_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
 
@@ -215,8 +204,6 @@ def p_instance_of(t):
     '''instance_of : INSTANCEOF LPAREN IDENT RPAREN'''
     t[0] = t[3] + "*"
 
-
-# FIXME - Maybe limit this to at most be [][] indicating arrays in arrays 
 def p_array(t):
     '''array : TYPE ARR'''
     t[0] = t[1] + t[2]
@@ -228,14 +215,6 @@ def p_ARR(t):
         t[0] = "[]"
     else:
         t[0] = "[]" + t[3]
-
-#def p_array_list(t):
-#    '''array_list : array IDENT ASSIGN expression_new_array
-#                  | array IDENT expression_new_array COMMA array_list'''
-#    if len(t) == 5:
-#        t[0] = AST.array_list(t[2], t[1], t[4], None, t.lexer.lineno)
-#    else:
-#        t[0] = AST.array_list(t[2], t[1], t[4], t[5], t.lexer.lineno)
 
 def p_variables_list(t):
     '''variables_list : IDENT
@@ -258,19 +237,10 @@ def p_class_declaration_list(t):
     else:
         t[0] = AST.class_declaration_list(t[1], t[2], t.lexer.lineno)
 
-# FIXME - Currently cannot extend parent class(') 
-# FIXME - CONSTRUCTOR?!?!?!?!?!?!!?!??!?!?!!?!?!?
 def p_class_declaration(t):
     '''class_declaration : CLASS IDENT optional_extends LCURL class_descriptor RCURL'''
     t[0] = AST.class_declaration(t[2], t[3], t[5], t.lexer.lineno)
 
-# FIXME - Put class descriptors into symbol table
-    # put attributes into the symbol table
-    # Generate code for class 
-    # Create "this." syntax for accessing instance attributes 
-    # Figure out how to do the lookup for finding methods when calling methods on instances
-    # Create syntax for recognizing instances 
-    # put instances into symbol table
 def p_class_descriptor(t):
     '''class_descriptor : optional_attributes_declaration_list optional_methods_declaration_list'''
     t[0] = AST.class_descriptor(t[1], t[2], t.lexer.lineno)
@@ -283,16 +253,8 @@ def p_optional_attributes_declaration_list(t):
 def p_attributes_declaration_list(t):
     '''attributes_declaration_list : FT attributes_list SEMICOL
                                    | FT attributes_list SEMICOL attributes_declaration_list'''
-                                   #| array_list SEMICOL
-                                   #| array_list SEMICOL attributes_declaration_list'''
-    #if len(t) == 3:
-    #    t[0] = AST.attributes_declaration_list(t[1].type, t[1], None, t.lexer.lineno)
-    #elif len(t) == 4:
     if len(t) == 4:
-        #if not t[1].__class__.__name__ == "array_list":
         t[0] = AST.attributes_declaration_list(t[1], t[2], None, t.lexer.lineno)
-        #else:
-        #    t[0] = AST.attributes_declaration_list(t[1].type, t[1], t[3], t.lexer.lineno)
     else:
         t[0] = AST.attributes_declaration_list(t[1], t[2], t[4], t.lexer.lineno)
 
@@ -321,7 +283,6 @@ def p_method(t):
     'method : FUNCTION FT IDENT LPAREN optional_parameter_list RPAREN LCURL method_body RCURL'
     t[0] = AST.method(t[2], t[3], AST.parameter_list(None, "this", t[5], t.lexer.lineno), t[8], t.lexer.lineno)
 
-# FIXME - NOT implemented or even a part of the descriptor definiton 
 def p_optional_extends(t):
     '''optional_extends : empty
                         | EXTENDS IDENT'''
@@ -418,9 +379,6 @@ def p_statement_call(t):
     'statement_call : IDENT LPAREN optional_expression_list RPAREN'
     t[0] = AST.statement_call(t[1], t[3], t.lexer.lineno)
 
-# FIXME Be able to do instance access on a class and call a method
-# which might be a member of one of the instance variables 
-# and not the instance itself
 def p_statement_method(t):
     '''statement_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'''
     # FIXME             | IDENT DOT statement_method'''
@@ -470,16 +428,8 @@ def p_expression_array_indexing(t):
     t[0] = AST.expression_array_indexing(t[1], t[3], t.lexer.lineno)
 
 def p_expression_new_array(t):
-    'expression_new_array : NEW ARRAY LPAREN FT COMMA expression RPAREN' #optional_data RPAREN'
-    t[0] = AST.expression_new_array(t[4], t[6], t.lexer.lineno) #t[7], t.lexer.lineno)
-
-#def p_optional_data(t):
-#    '''optional_data : empty
-#                     | COMMA LBRAC expression_list RBRAC'''
-#    if len(t) == 2:
-#        t[0] = t[1]
-#    else:
-#        t[0] = t[3]
+    'expression_new_array : NEW ARRAY LPAREN FT COMMA expression RPAREN' 
+    t[0] = AST.expression_new_array(t[4], t[6], t.lexer.lineno)
 
 def p_expression_new_instance(t):
     'expression_new_instance : NEW IDENT LPAREN optional_instance_expression_list RPAREN'
@@ -541,12 +491,10 @@ def p_expression_attribute(t):
 
 def p_expression_this_method(t):
     'expression_this_method : THIS DOT IDENT LPAREN optional_expression_list RPAREN'
-    # FIXME                 | IDENT DOT expression_method
     t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_expression_method(t):
     'expression_method : IDENT DOT IDENT LPAREN optional_expression_list RPAREN'
-    # FIXME            | IDENT DOT expression_method
     t[0] = AST.expression_method(t[1], t[3], t[5], t.lexer.lineno)
 
 def p_expression_binop(t):
