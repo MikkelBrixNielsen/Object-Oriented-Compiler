@@ -38,6 +38,10 @@ class Emit:
 
     def emit(self):
         for instruction in self.intermediate_representation:
+            #args = ""
+            #for arg in instruction.args:
+            #    args = args + ", '" + str(arg) + "'"
+            #print(f"ins({instruction.opcode}{args})")
             self._dispatch(instruction)
 
     def get_code(self):
@@ -123,7 +127,8 @@ class Emit:
                     t = instr.args[0]
                     if len(self._get_stars(t)) > 0:
                         t = "*"    
-                    s = "\"" + _print_type[t] + "\\n\", "
+                    pt = _print_type[t]
+                    s = "\"" + pt + "\\n\", (double)" if pt == "%f" else "\"" + pt + "\\n\", "
                     if t == "*":
                         s = s + "(void*)"
                     self._raw(s)

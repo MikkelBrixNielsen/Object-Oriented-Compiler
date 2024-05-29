@@ -17,10 +17,9 @@ class NameCategory(Enum):
     ARRAY = auto()
     THIS = auto()
 
-class Scope(Enum):
-    FUNCTION = auto()
-    CLASS = auto()
-
+#class Scope(Enum):
+#    FUNCTION = auto()
+#    CLASS = auto()
 
 class SymVal():
     """The information for a name (symbol) is its category together ith
@@ -455,6 +454,8 @@ def _extend(self, t, ext):
 def _check_if_initialized(self, cn, t):
     if (not cn == "expression_integer" and not cn == "expression_float" and 
         not cn == "expression_boolean" and not cn == "expression_char"):
+        if cn in ["function", "method"]:
+            return 
         ident = _get_identifier(t)
         ident = ident if not isinstance(ident, tuple) else ident[0]
         val = None

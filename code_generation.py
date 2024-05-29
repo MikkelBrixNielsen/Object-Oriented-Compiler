@@ -103,7 +103,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
             val = self._current_scope.lookup(t.lhs)
             label = val.label if val.cat != NameCategory.PARAMETER else ""
             self._app(Ins(Op.ASSIGN, t.lhs + label))
-        if cnl  == "expression_array_indexing" and (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
+        if cnl  == "expression_array_indexing" or (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
             self._app(Ins(Op.INDENT))
         elif cnl == "expression_attribute" and cnr == "expression_identifier":
             self._app(Ins(Op.INDENT))
@@ -113,7 +113,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         cnr = t.rhs.__class__.__name__
         cnl = t.lhs.__class__.__name__
         # if lhs isn't a string then expression will print itself
-        if not isinstance(t.lhs , str) and (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
+        if not isinstance(t.lhs , str) or (cnl == "expression_attribute" and not cnr == "expression_new_instance"):
             self._app(Ins(Op.ASSIGN, ''))
         if not cnr == "expression_new_instance":
             self._app(Ins(Op.RAW, "TEMP" + t.temp_label))

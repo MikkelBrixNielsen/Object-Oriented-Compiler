@@ -584,7 +584,7 @@ def p_error(t):
         cause = f" at '{t.value}'"
         location = t.lexer.lineno
     except AttributeError:
-        cause = " - check for missing closing braces"
+        cause = " - check for missing closing braces or main function"
         location = "unknown"
     error_message("Syntax Analysis",
                   f"Problem detected{cause}.",

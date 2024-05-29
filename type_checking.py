@@ -70,6 +70,14 @@ class ASTTypeCheckingVisitor(VisitorsBase):
     def preMidVisit_statement_ifthenelse(self, t):
         self._is_boolean_convertable(t)
 
+    def postVisit_statement_return(self, t):
+        if t.__class__.__name__ in ["function", "method"]:
+            val = self._current_scope.lookup(t.name)
+            if not val:
+                error_message("Type checking.",
+                              f"Identifier or function '{t.name}' not defined or accessed before declaration",
+                              t.lineno)
+
     def midVisit_statement_while(self, t):
         self._is_boolean_convertable(t)
 
