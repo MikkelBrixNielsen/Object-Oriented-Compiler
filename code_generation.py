@@ -316,8 +316,6 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         self._app(Ins(Op.MEMCHECK, "TEMP" + t.temp_label))
         self._app(Ins(Op.INDENT))
 
-
-
     def midVisit_expression_new_instance(self, t):
         identifier = ""
         cn = t.identifier.__class__.__name__
@@ -423,7 +421,7 @@ class ASTCodeGenerationVisitor(VisitorsBase):
         if isinstance(t.identifier, str):
             label = ""
             val = self._current_scope.lookup(t.identifier)
-            if hasattr(val, "label"):
+            if hasattr(val, "label") and val.cat != NameCategory.PARAMETER:
                 label = val.label
             self._app(Ins(Op.RAW, f"{t.identifier + label}["))
         else:

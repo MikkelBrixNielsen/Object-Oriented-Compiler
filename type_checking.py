@@ -518,7 +518,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
             inst = self._current_scope.lookup(t.inst)
         if not inst:
             error_message("Type Checking", 
-                          f"'{ident}' could not be found.",
+                          f"{cat.capitalize()} '{ident}' could not be found.",
                           t.lineno)
         field = None
         desc = None
@@ -529,7 +529,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         else: 
             if not inst.type[-1:] == "*":
                 error_message("Type Checking",
-                              f"Identifier '{t.inst}' is not an instance.",
+                              f"{cat.capitalize()} '{t.inst}' is not an instance.",
                               t.lineno)
             desc = self._current_scope.lookup_all(inst.type[:-1])
         
@@ -548,7 +548,7 @@ class ASTTypeCheckingVisitor(VisitorsBase):
         if not field:
             field = t.field if cat == "attribute" else t.name
             error_message("Type Checking",
-                          f"Identifier '{field}' not found in instance '{t.inst}'",
+                          f"{cat.capitalize()} '{field}' not found in instance '{t.inst}'",
                           t.lineno)
         return field
         
