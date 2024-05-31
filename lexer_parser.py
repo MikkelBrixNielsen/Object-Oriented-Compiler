@@ -418,7 +418,17 @@ def p_expression(t):
                   | expression_new_array
                   | expression_array_indexing
                   | expression_group'''
+                  #| unary_minus_integer
+                  #| unary_minus_float'''
     t[0] = t[1]
+
+#def p_unary_minus_integer(t):
+#    '''unary_minus_integer : MINUS expression_integer'''
+#    t[0] = AST.expression_binop(AST.expression_integer(0, t.lexer.lineno), t[1], t[2], t.lexer.lineno)
+
+#def p_unary_minus_float(t):
+#    '''unary_minus_float : MINUS expression_float'''
+#    t[0] = AST.expression_binop(AST.expression_integer(0, t.lexer.lineno), t[1], t[2], t.lexer.lineno)
 
 def p_expression_array_indexing(t):
     '''expression_array_indexing : IDENT LBRAC expression RBRAC 

@@ -576,8 +576,10 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 if rhs_val and rhs_val.cat != NameCategory.PARAMETER:
                     return rhs_val.attr_assigned_value[field], field
             elif cnr not in {"expression_call", "expression_method"}:
+                rhs = None
                 if rhs_val and rhs_val.cat != NameCategory.PARAMETER:
-                    return rhs_val._assigned_value, None
+                    rhs = rhs_val._assigned_value if hasattr(rhs_val, "_assigned_value") else None                    
+                return rhs, None
             return t.rhs, None
 
         if t.rhs.type in PRIM_TYPES:
@@ -604,19 +606,19 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                 lhs_val._attr_assigned_value = {}
 
             rv, field = get_rhs_value(rhs_id, rhs_class)
+            if rv:
+                if not hasattr(rv, "_references"):
+                    rv._references = {} if rhs_class == "expression_attribute" else []
 
-            if not hasattr(rv, "_references"):
-                rv._references = {} if rhs_class == "expression_attribute" else []
+                if rhs_class == "expression_attribute":
+                    if field not in rv._references:
+                        rv._references[field] = []
 
-            if rhs_class == "expression_attribute":
-                if field not in rv._references:
-                    rv._references[field] = []
-      
-                rv._references[field].append((lhs, field))
-                lhs_val._attr_assigned_value[field] = rv
-            else:
-                rv._references.append((lhs, field))
-                lhs_val._attr_assigned_value[field] = rv
+                    rv._references[field].append((lhs, field))
+                    lhs_val._attr_assigned_value[field] = rv
+                else:
+                    rv._references.append((lhs, field))
+                    lhs_val._attr_assigned_value[field] = rv
         else:
             lhs_val = self._current_scope.lookup(lhs_id)
             if hasattr(lhs_val, "_assigned_value"):
@@ -628,12 +630,12 @@ class ASTCodeGenerationVisitor(VisitorsBase):
                     self._app(Ins(Op.FREE, lhs_id + label))
 
             rv, _ = get_rhs_value(rhs_id, rhs_class)
+            if rv:
+                if not hasattr(rv, "_references"):
+                    rv._references = []
 
-            if not hasattr(rv, "_references"):
-                rv._references = []
-
-            rv._references.append(lhs_id)
-            lhs_val._assigned_value = rv
+                rv._references.append(lhs_id)
+                lhs_val._assigned_value = rv
 
 
     def _rhs_exprresion_attribute_assign_aux(self, rv):

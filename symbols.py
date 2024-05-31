@@ -298,6 +298,8 @@ class ASTSymbolVisitor(VisitorsBase):
             if t.lhs.inst == "this":
                 name = f"this.{t.lhs.field}"
                 lhs = self._current_scope.lookup_class(t.lhs.field)
+                if not lhs:
+                    lhs = _lookup_in_extensions(self, t.lhs, cn)
             else:
                 name = f"{t.lhs.inst}.{t.lhs.field}"
                 lhs = self._current_scope.lookup(t.lhs.inst)

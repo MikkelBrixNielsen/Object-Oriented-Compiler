@@ -518,7 +518,7 @@ class expression_new_instance:
 
     def accept(self, visitor):
         visitor.preVisit(self)
-        if self.temp:
+        if self.temp and not isinstance(self.temp, str):
             self.temp.accept(visitor)
         visitor.midVisit(self)
         if self.params:
